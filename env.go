@@ -4,12 +4,8 @@ import (
 	"os"
 )
 
-var disableEnv bool
-
-func init() {
-	disableEnv = os.Getenv("GONOMOCKS") != ""
-}
+var envVarName = "GONOMOCKS"
 
 func Disabled() bool {
-	return disableEnv
+	return os.Getenv(envVarName) != ""
 }
