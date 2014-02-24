@@ -19,16 +19,15 @@ func ConnectionFailure(*http.Request) (*http.Response, error) {
 }
 
 func NewMockTransport() *MockTransport {
-	return &MockTransport{true, make(map[string]Responder), nil}
+	return &MockTransport{make(map[string]Responder), nil}
 }
 
 // MockTransport implements http.RoundTripper, which fulfills single http requests issued by
 // an http.Client.  This implementation doesn't actually make the call, instead deferring to
 // the registered list of responders.
 type MockTransport struct {
-	IgnoreQueryString bool
-	responders        map[string]Responder
-	noResponder       Responder
+	responders  map[string]Responder
+	noResponder Responder
 }
 
 // RoundTrip is required to implement http.MockTransport.  Instead of fulfilling the given request,
@@ -37,25 +36,36 @@ type MockTransport struct {
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	url := req.URL.String()
 
-	if m.IgnoreQueryString {
-		url = strings.Split(url, "?")[0]
+	// try and get a responder that matches the method and URL
+	responder := m.responderForKey(req.Method + " " + url)
+
+	// if we weren't able to find a responder and the URL contains a querystring
+	// then we strip off the querystring and try again.
+	if responder == nil && strings.Contains(url, "?") {
+		responder = m.responderForKey(req.Method + " " + strings.Split(url, "?")[0])
 	}
 
-	key := req.Method + " " + url
-
-	// scan through the responders and find one that matches our key
-	for k, r := range m.responders {
-		if k != key {
-			continue
-		}
-		return r(req)
+	// if we found a responder, call it
+	if responder != nil {
+		return responder(req)
 	}
 
-	// fire the 'no responder' responder
+	// we didn't find a responder, so fire the 'no responder' responder
 	if m.noResponder == nil {
 		return ConnectionFailure(req)
 	}
 	return m.noResponder(req)
+}
+
+// responderForKey returns a responder for a given key
+func (m *MockTransport) responderForKey(key string) Responder {
+	for k, r := range m.responders {
+		if k != key {
+			continue
+		}
+		return r
+	}
+	return nil
 }
 
 // RegisterResponder adds a new responder, associated with a given HTTP method and URL.  When a
