@@ -18,6 +18,7 @@ func ConnectionFailure(*http.Request) (*http.Response, error) {
 	return nil, NoResponderFound
 }
 
+// NewMockTransport creates a new *MockTransport with no responders.
 func NewMockTransport() *MockTransport {
 	return &MockTransport{make(map[string]Responder), nil}
 }
@@ -30,9 +31,9 @@ type MockTransport struct {
 	noResponder Responder
 }
 
-// RoundTrip is required to implement http.MockTransport.  Instead of fulfilling the given request,
-// the internal list of responders is consulted to handle the request.  If no responder is found
-// an error is returned, which is the equivalent of a network error.
+// RoundTrip receives HTTP requests and routes them to the appropriate responder.  It is required to
+// implement the http.RoundTripper interface.  You will not interact with this directly, instead
+// the *http.Client you are using will call it for you.
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	url := req.URL.String()
 
@@ -75,22 +76,34 @@ func (m *MockTransport) RegisterResponder(method, url string, responder Responde
 }
 
 // RegisterNoResponder is used to register a responder that will be called if no other responder is
-// found.  The default is `ConnectionFailure`
+// found.  The default is ConnectionFailure.
 func (m *MockTransport) RegisterNoResponder(responder Responder) {
 	m.noResponder = responder
 }
 
-// Reset removes all registered responders
+// Reset removes all registered responders (including the no responder) from the MockTransport
 func (m *MockTransport) Reset() {
 	m.responders = make(map[string]Responder)
 	m.noResponder = nil
 }
 
-// DefaultTransport allows users to easily and globally alter the default RoundTripper for
-// all http requests.
+// DefaultTransport is the default mock transport used by Activate, Deactivate, Reset,
+// DeactivateAndReset, RegisterResponder, and RegisterNoResponder.
 var DefaultTransport = NewMockTransport()
 
-// Activate replaces the `Transport` on the `http.DefaultClient` with our `DefaultTransport`.
+// Activate starts the mock environment.  This should be called before your tests run.  Under the
+// hood this replaces the Transport on the http.DefaultClient with DefaultTransport.
+//
+// To enable mocks for a test, simply activate at the beginning of a test:
+// 		func TestFetchArticles(t *testing.T) {
+// 			httpmock.Activate()
+// 			// all http requests will now be intercepted
+// 		}
+//
+// If you want all of your tests in a package to be mocked, just call Activate from init():
+// 		func init() {
+// 			httpmock.Activate()
+// 		}
 func Activate() {
 	if Disabled() {
 		return
@@ -98,7 +111,16 @@ func Activate() {
 	http.DefaultClient.Transport = DefaultTransport
 }
 
-// Deactivate replaces our `DefaultTransport` with the `http.DefaultTransport`.
+// Deactivate shuts down the mock environment.  Any HTTP calls made after this will use a live
+// transport.
+//
+// Usually you'll call it in a defer right after activating the mock environment:
+// 		func TestFetchArticles(t *testing.T) {
+// 			httpmock.Activate()
+// 			defer httpmock.Deactivate()
+//
+// 			// when this test ends, the mock environment will close
+// 		}
 func Deactivate() {
 	if Disabled() {
 		return
@@ -106,24 +128,46 @@ func Deactivate() {
 	http.DefaultClient.Transport = http.DefaultTransport
 }
 
-// Reset resets the registered responders on the `DefaultTransport`
+// Reset will remove any registered mocks and return the mock environment to it's initial state.
 func Reset() {
 	DefaultTransport.Reset()
 }
 
-// DeactivateAndReset is just a convenience method for calling `Deactivate()` and then `Reset()`
+// DeactivateAndReset is just a convenience method for calling Deactivate() and then Reset()
 // Happy deferring!
 func DeactivateAndReset() {
 	Deactivate()
 	Reset()
 }
 
-// RegisterResponder adds a responder to the `DefaultTransport` responder table.
+// RegisterResponder adds a mock that will catch requests to the given HTTP method and URL, then
+// route them to the Responder which will generate a response to be returned to the client.
+//
+// Example:
+// 		func TestFetchArticles(t *testing.T) {
+// 			httpmock.Activate()
+// 			httpmock.DeactivateAndReset()
+//
+// 			httpmock.RegisterResponder("GET", "http://example.com/",
+// 				httpmock.NewStringResponder("hello world", 200))
+//
+//			// requests to http://example.com/ will now return 'hello world'
+// 		}
 func RegisterResponder(method, url string, responder Responder) {
 	DefaultTransport.RegisterResponder(method, url, responder)
 }
 
-// RegisterNoResponder adds a 'no responder' to the `DefaultTransport`
+// RegisterNoResponder adds a mock that will be called whenever a request for an unregistered URL
+// is received.  The default behavior is to return a connection error.
+//
+// In some cases you may not want all URLs to be mocked, in which case you can do this:
+// 		func TestFetchArticles(t *testing.T) {
+// 			httpmock.Activate()
+// 			httpmock.DeactivateAndReset()
+//			httpmock.RegisterNoResponder(http.DefaultTransport.RoundTrip)
+//
+// 			// any requests that don't have a registered URL will be fetched normally
+// 		}
 func RegisterNoResponder(responder Responder) {
 	DefaultTransport.RegisterNoResponder(responder)
 }
