@@ -1,4 +1,4 @@
-httpmock
+httpmock [![Build Status](https://travis-ci.org/jarcoal/httpmock.png?branch=master)](https://travis-ci.org/jarcoal/httpmock)
 =====
 
 ### Simple Example:
