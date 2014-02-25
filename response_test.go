@@ -10,7 +10,7 @@ import (
 func TestNewStringResponse(t *testing.T) {
 	body := "hello world"
 	status := 200
-	response := NewStringResponse(body, status)
+	response := NewStringResponse(status, body)
 
 	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
@@ -29,7 +29,7 @@ func TestNewStringResponse(t *testing.T) {
 func TestNewBytesResponse(t *testing.T) {
 	body := []byte("hello world")
 	status := 200
-	response := NewBytesResponse(body, status)
+	response := NewBytesResponse(status, body)
 
 	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
@@ -53,7 +53,7 @@ func TestNewJsonResponse(t *testing.T) {
 	body := &schema{"world"}
 	status := 200
 
-	response, err := NewJsonResponse(body, status)
+	response, err := NewJsonResponse(status, body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestNewXmlResponse(t *testing.T) {
 	body := &schema{"world"}
 	status := 200
 
-	response, err := NewXmlResponse(body, status)
+	response, err := NewXmlResponse(status, body)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,7 +16,7 @@ func TestMockTransport(t *testing.T) {
 	url := "https://github.com/"
 	body := "hello world"
 
-	RegisterResponder("GET", url, NewStringResponder(body, 200))
+	RegisterResponder("GET", url, NewStringResponder(200, body))
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -75,7 +75,7 @@ func TestMockTransportNoResponder(t *testing.T) {
 		t.Fatal("expected to receive a connection error due to lack of responders")
 	}
 
-	RegisterNoResponder(NewStringResponder("hello world", 200))
+	RegisterNoResponder(NewStringResponder(200, "hello world"))
 
 	resp, err := http.Get(testUrl)
 	if err != nil {
@@ -97,7 +97,7 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 	defer DeactivateAndReset()
 
 	// register the testUrl responder
-	RegisterResponder("GET", testUrl, NewStringResponder("hello world", 200))
+	RegisterResponder("GET", testUrl, NewStringResponder(200, "hello world"))
 
 	// make a request for the testUrl with a querystring
 	resp, err := http.Get(testUrl + "?hello=world")

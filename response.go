@@ -19,7 +19,7 @@ func ResponderFromResponse(resp *http.Response) Responder {
 
 // NewStringResponse creates an *http.Response with a body based on the given string.  Also accepts
 // an http status code.
-func NewStringResponse(body string, status int) *http.Response {
+func NewStringResponse(status int, body string) *http.Response {
 	return &http.Response{
 		Status:     strconv.Itoa(status),
 		StatusCode: status,
@@ -28,13 +28,13 @@ func NewStringResponse(body string, status int) *http.Response {
 }
 
 // NewStringResponder creates a Responder from a given body (as a string) and status code.
-func NewStringResponder(body string, status int) Responder {
-	return ResponderFromResponse(NewStringResponse(body, status))
+func NewStringResponder(status int, body string) Responder {
+	return ResponderFromResponse(NewStringResponse(status, body))
 }
 
 // NewBytesResponse creates an *http.Response with a body based on the given bytes.  Also accepts
 // an http status code.
-func NewBytesResponse(body []byte, status int) *http.Response {
+func NewBytesResponse(status int, body []byte) *http.Response {
 	return &http.Response{
 		Status:     strconv.Itoa(status),
 		StatusCode: status,
@@ -43,24 +43,24 @@ func NewBytesResponse(body []byte, status int) *http.Response {
 }
 
 // NewBytesResponder creates a Responder from a given body (as a byte slice) and status code.
-func NewBytesResponder(body []byte, status int) Responder {
-	return ResponderFromResponse(NewBytesResponse(body, status))
+func NewBytesResponder(status int, body []byte) Responder {
+	return ResponderFromResponse(NewBytesResponse(status, body))
 }
 
 // NewJsonResponse creates an *http.Response with a body that is a json encoded representation of
 // the given interface{}.  Also accepts an http status code.
-func NewJsonResponse(body interface{}, status int) (*http.Response, error) {
+func NewJsonResponse(status int, body interface{}) (*http.Response, error) {
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
-	return NewBytesResponse(encoded, status), nil
+	return NewBytesResponse(status, encoded), nil
 }
 
 // NewJsonResponder creates a Responder from a given body (as an interface{} that is encoded to
 // json) and status code.
-func NewJsonResponder(body interface{}, status int) (Responder, error) {
-	resp, err := NewJsonResponse(body, status)
+func NewJsonResponder(status int, body interface{}) (Responder, error) {
+	resp, err := NewJsonResponse(status, body)
 	if err != nil {
 		return nil, err
 	}
@@ -69,18 +69,18 @@ func NewJsonResponder(body interface{}, status int) (Responder, error) {
 
 // NewXmlResponse creates an *http.Response with a body that is an xml encoded representation
 // of the given interface{}.  Also accepts an http status code.
-func NewXmlResponse(body interface{}, status int) (*http.Response, error) {
+func NewXmlResponse(status int, body interface{}) (*http.Response, error) {
 	encoded, err := xml.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
-	return NewBytesResponse(encoded, status), nil
+	return NewBytesResponse(status, encoded), nil
 }
 
 // NewXmlResponder creates a Responder from a given body (as an interface{} that is encoded to xml)
 // and status code.
-func NewXmlResponder(body interface{}, status int) (Responder, error) {
-	resp, err := NewXmlResponse(body, status)
+func NewXmlResponder(status int, body interface{}) (Responder, error) {
+	resp, err := NewXmlResponse(status, body)
 	if err != nil {
 		return nil, err
 	}

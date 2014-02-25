@@ -8,7 +8,7 @@ func TestFetchArticles(t *testing.T) {
 	defer httpmock.DeactivateAndReset()
 
 	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
-		httpmock.NewStringResponder(`[{"id": 1, "name": "My Great Article"}]`, 200))
+		httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
 
 	// do stuff that makes a request to articles.json
 }
@@ -26,10 +26,10 @@ func TestFetchArticles(t *testing.T) {
 	// mock to list out the articles
 	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
 		func(req *http.Request) (*http.Response, error) {
-			if resp, err := httpmock.NewJsonResponse(articles, 200); err != nil {
-				return httpmock.NewStringResponse("", 500), nil
+			if resp, err := httpmock.NewJsonResponse(200, articles); err != nil {
+				return httpmock.NewStringResponse(500, ""), nil
 			}
-			return resp
+			return resp, nil
 		},
 	)
 
@@ -38,15 +38,15 @@ func TestFetchArticles(t *testing.T) {
 		func(req *http.Request) (*http.Response, error) {
 			article := make(map[string]interface{})
 			if err := json.NewDecoder(req.Body).Decode(&article); err != nil {
-				return httpmock.NewStringResponse("", 400)
+				return httpmock.NewStringResponse(400, ""), nil
 			}
 
 			articles = append(articles, article)
 
-			if resp, err := httpmock.NewJsonResponse(article, 200); err != nil {
-				return httpmock.NewStringResponse("", 500), nil
+			if resp, err := httpmock.NewJsonResponse(200, article); err != nil {
+				return httpmock.NewStringResponse(500, ""), nil
 			}
-			return resp
+			return resp, nil
 		},
 	)
 
