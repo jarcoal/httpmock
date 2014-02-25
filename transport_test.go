@@ -114,3 +114,28 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 		t.Fatal("expected body to be 'hello world'")
 	}
 }
+
+type dummyTripper struct{}
+
+func (d *dummyTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, nil
+}
+
+func TestMockTransportOriginalTransport(t *testing.T) {
+	DeactivateAndReset()
+
+	tripper := &dummyTripper{}
+	http.DefaultClient.Transport = tripper
+
+	Activate()
+
+	if http.DefaultClient.Transport == tripper {
+		t.Fatal("expected http.DefaultClient.Transport to be a mock transport")
+	}
+
+	Deactivate()
+
+	if http.DefaultClient.Transport != tripper {
+		t.Fatal("expected http.DefaultClient.Transport to be dummy")
+	}
+}

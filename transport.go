@@ -91,6 +91,10 @@ func (m *MockTransport) Reset() {
 // DeactivateAndReset, RegisterResponder, and RegisterNoResponder.
 var DefaultTransport = NewMockTransport()
 
+// originalTransport is a cache of the original transport used so we can put it back
+// when Deactivate is called.
+var originalTransport = http.DefaultTransport
+
 // Activate starts the mock environment.  This should be called before your tests run.  Under the
 // hood this replaces the Transport on the http.DefaultClient with DefaultTransport.
 //
@@ -108,6 +112,7 @@ func Activate() {
 	if Disabled() {
 		return
 	}
+	originalTransport = http.DefaultClient.Transport
 	http.DefaultClient.Transport = DefaultTransport
 }
 
@@ -125,7 +130,7 @@ func Deactivate() {
 	if Disabled() {
 		return
 	}
-	http.DefaultClient.Transport = http.DefaultTransport
+	http.DefaultClient.Transport = originalTransport
 }
 
 // Reset will remove any registered mocks and return the mock environment to it's initial state.
