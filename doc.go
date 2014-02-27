@@ -23,7 +23,8 @@ Advanced Example:
 		// mock to list out the articles
 		httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
 			func(req *http.Request) (*http.Response, error) {
-				if resp, err := httpmock.NewJsonResponse(200, articles); err != nil {
+				resp, err := httpmock.NewJsonResponse(200, articles)
+				if err != nil {
 					return httpmock.NewStringResponse(500, ""), nil
 				}
 				return resp
@@ -40,7 +41,8 @@ Advanced Example:
 
 				articles = append(articles, article)
 
-				if resp, err := httpmock.NewJsonResponse(200, article); err != nil {
+				resp, err := httpmock.NewJsonResponse(200, article)
+				if err != nil {
 					return httpmock.NewStringResponse(500, ""), nil
 				}
 				return resp, nil
