@@ -112,8 +112,8 @@ func Activate() {
 	if Disabled() {
 		return
 	}
-	originalTransport = http.DefaultClient.Transport
-	http.DefaultClient.Transport = DefaultTransport
+	originalTransport = http.DefaultTransport
+	http.DefaultTransport = DefaultTransport
 }
 
 // Deactivate shuts down the mock environment.  Any HTTP calls made after this will use a live
@@ -130,7 +130,7 @@ func Deactivate() {
 	if Disabled() {
 		return
 	}
-	http.DefaultClient.Transport = originalTransport
+	http.DefaultTransport = originalTransport
 }
 
 // Reset will remove any registered mocks and return the mock environment to it's initial state.
