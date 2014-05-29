@@ -91,9 +91,9 @@ func (m *MockTransport) Reset() {
 // DeactivateAndReset, RegisterResponder, and RegisterNoResponder.
 var DefaultTransport = NewMockTransport()
 
-// originalTransport is a cache of the original transport used so we can put it back
+// InitialTransport is a cache of the original transport used so we can put it back
 // when Deactivate is called.
-var originalTransport = http.DefaultTransport
+var InitialTransport = http.DefaultTransport
 
 // Activate starts the mock environment.  This should be called before your tests run.  Under the
 // hood this replaces the Transport on the http.DefaultClient with DefaultTransport.
@@ -112,7 +112,13 @@ func Activate() {
 	if Disabled() {
 		return
 	}
-	originalTransport = http.DefaultTransport
+
+	// make sure that if Activate is called multiple times it doesn't overwrite the InitialTransport
+	// with a mock transport.
+	if http.DefaultTransport != DefaultTransport {
+		InitialTransport = http.DefaultTransport
+	}
+
 	http.DefaultTransport = DefaultTransport
 }
 
@@ -130,7 +136,7 @@ func Deactivate() {
 	if Disabled() {
 		return
 	}
-	http.DefaultTransport = originalTransport
+	http.DefaultTransport = InitialTransport
 }
 
 // Reset will remove any registered mocks and return the mock environment to it's initial state.
@@ -169,7 +175,7 @@ func RegisterResponder(method, url string, responder Responder) {
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
 // 			httpmock.DeactivateAndReset()
-//			httpmock.RegisterNoResponder(http.DefaultTransport.RoundTrip)
+//			httpmock.RegisterNoResponder(httpmock.InitialTransport.RoundTrip)
 //
 // 			// any requests that don't have a registered URL will be fetched normally
 // 		}
