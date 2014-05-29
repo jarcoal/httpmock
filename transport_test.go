@@ -121,21 +121,21 @@ func (d *dummyTripper) RoundTrip(*http.Request) (*http.Response, error) {
 	return nil, nil
 }
 
-func TestMockTransportOriginalTransport(t *testing.T) {
+func TestMockTransportInitialTransport(t *testing.T) {
 	DeactivateAndReset()
 
 	tripper := &dummyTripper{}
-	http.DefaultClient.Transport = tripper
+	http.DefaultTransport = tripper
 
 	Activate()
 
-	if http.DefaultClient.Transport == tripper {
-		t.Fatal("expected http.DefaultClient.Transport to be a mock transport")
+	if http.DefaultTransport == tripper {
+		t.Fatal("expected http.DefaultTransport to be a mock transport")
 	}
 
 	Deactivate()
 
-	if http.DefaultClient.Transport != tripper {
-		t.Fatal("expected http.DefaultClient.Transport to be dummy")
+	if http.DefaultTransport != tripper {
+		t.Fatal("expected http.DefaultTransport to be dummy")
 	}
 }
