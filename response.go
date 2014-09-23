@@ -100,11 +100,15 @@ func NewRespBodyFromBytes(body []byte) io.ReadCloser {
 }
 
 type dummyReadCloser struct {
-	body io.Reader
+	body io.ReadSeeker
 }
 
 func (d *dummyReadCloser) Read(p []byte) (n int, err error) {
-	return d.body.Read(p)
+	n, err = d.body.Read(p)
+	if err == io.EOF {
+		d.body.Seek(0, 0)
+	}
+	return n, err
 }
 
 func (d *dummyReadCloser) Close() error {
