@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"io/ioutil"
+	"net/http"
 	"testing"
 )
 
@@ -96,5 +97,43 @@ func TestNewXmlResponse(t *testing.T) {
 
 	if checkBody.Hello != body.Hello {
 		t.FailNow()
+	}
+}
+
+func TestRewindResponse(t *testing.T) {
+	body := []byte("hello world")
+	status := 200
+	responses := []*http.Response{
+		NewBytesResponse(status, body),
+		NewStringResponse(status, string(body)),
+	}
+
+	for _, response := range responses {
+
+		data, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if string(data) != string(body) {
+			t.FailNow()
+		}
+
+		if response.StatusCode != status {
+			t.FailNow()
+		}
+
+		data, err = ioutil.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if string(data) != string(body) {
+			t.FailNow()
+		}
+
+		if response.StatusCode != status {
+			t.FailNow()
+		}
 	}
 }
