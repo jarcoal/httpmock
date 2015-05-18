@@ -58,6 +58,9 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return m.noResponder(req)
 }
 
+// do nothing with timeout
+func (m *MockTransport) CancelRequest(req *http.Request) {}
+
 // responderForKey returns a responder for a given key
 func (m *MockTransport) responderForKey(key string) Responder {
 	for k, r := range m.responders {
