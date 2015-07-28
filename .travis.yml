@@ -1,4 +1,4 @@
 language: go
-go: 1.2
+go: tip
 notifications:
     email: false
