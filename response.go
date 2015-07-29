@@ -56,7 +56,9 @@ func NewJsonResponse(status int, body interface{}) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewBytesResponse(status, encoded), nil
+	response := NewBytesResponse(status, encoded)
+	response.Header.Set("Content-Type", "application/json")
+	return response, nil
 }
 
 // NewJsonResponder creates a Responder from a given body (as an interface{} that is encoded to
