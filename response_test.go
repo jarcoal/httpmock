@@ -90,6 +90,10 @@ func TestNewXmlResponse(t *testing.T) {
 		t.FailNow()
 	}
 
+	if response.Header.Get("Content-Type") != "application/xml" {
+		t.FailNow()
+	}
+
 	checkBody := &schema{}
 	if err := xml.NewDecoder(response.Body).Decode(checkBody); err != nil {
 		t.Fatal(err)
