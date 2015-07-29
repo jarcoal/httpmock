@@ -40,7 +40,7 @@ func NewBytesResponse(status int, body []byte) *http.Response {
 		Status:     strconv.Itoa(status),
 		StatusCode: status,
 		Body:       NewRespBodyFromBytes(body),
-                Header:     http.Header{},
+		Header:     http.Header{},
 	}
 }
 
