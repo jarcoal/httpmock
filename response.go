@@ -24,6 +24,7 @@ func NewStringResponse(status int, body string) *http.Response {
 		Status:     strconv.Itoa(status),
 		StatusCode: status,
 		Body:       NewRespBodyFromString(body),
+		Header:     http.Header{},
 	}
 }
 
@@ -39,6 +40,7 @@ func NewBytesResponse(status int, body []byte) *http.Response {
 		Status:     strconv.Itoa(status),
 		StatusCode: status,
 		Body:       NewRespBodyFromBytes(body),
+                Header:     http.Header{},
 	}
 }
 
