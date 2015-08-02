@@ -98,9 +98,8 @@ var DefaultTransport = NewMockTransport()
 // when Deactivate is called.
 var InitialTransport = http.DefaultTransport
 
-// Used to handle custom http clients (i.e clients other than http.DefaultClient)
-var oldTransport http.RoundTripper
-var oldClient *http.Client
+// PointerToTransport is a pointer to the transport object we want to manipulate
+var PointerToTransport *http.RoundTripper
 
 // Activate starts the mock environment.  This should be called before your tests run.  Under the
 // hood this replaces the Transport on the http.DefaultClient with DefaultTransport.
@@ -115,36 +114,19 @@ var oldClient *http.Client
 // 		func init() {
 // 			httpmock.Activate()
 // 		}
-func Activate() {
+func Activate(transport *http.RoundTripper) {
 	if Disabled() {
 		return
 	}
 
 	// make sure that if Activate is called multiple times it doesn't overwrite the InitialTransport
 	// with a mock transport.
-	if http.DefaultTransport != DefaultTransport {
-		InitialTransport = http.DefaultTransport
+	if *transport != DefaultTransport {
+		InitialTransport = *transport
+		PointerToTransport = transport
 	}
 
-	http.DefaultTransport = DefaultTransport
-}
-
-// ActivateNonDefault starts the mock environment with a non-default http.Client.
-// This emulates the Activate function, but allows for custom clients that do not use
-// http.DefaultTransport
-//
-// To enable mocks for a test using a custom client, activate at the beginning of a test:
-// 		client := &http.Client{Transport: &http.Transport{TLSHandshakeTimeout: 60 * time.Second}}
-// 		httpmock.ActivateNonDefault(client)
-func ActivateNonDefault(client *http.Client) {
-	if Disabled() {
-		return
-	}
-
-	// save the custom client & it's RoundTripper
-	oldTransport = client.Transport
-	oldClient = client
-	client.Transport = DefaultTransport
+	*transport = DefaultTransport
 }
 
 // Deactivate shuts down the mock environment.  Any HTTP calls made after this will use a live
@@ -161,11 +143,8 @@ func Deactivate() {
 	if Disabled() {
 		return
 	}
-	http.DefaultTransport = InitialTransport
-
-	// reset the custom client to use it's original RoundTripper
-	if oldClient != nil {
-		oldClient.Transport = oldTransport
+	if PointerToTransport != nil {
+		*PointerToTransport = InitialTransport
 	}
 }
 
