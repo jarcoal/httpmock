@@ -4,7 +4,7 @@ httpmock [![Build Status](https://travis-ci.org/jarcoal/httpmock.png?branch=mast
 ### Simple Example:
 ```go
 func TestFetchArticles(t *testing.T) {
-	httpmock.Activate()
+	httpmock.Activate(&http.DefaultTransport)
 	defer httpmock.DeactivateAndReset()
 
 	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
@@ -17,7 +17,7 @@ func TestFetchArticles(t *testing.T) {
 ### Advanced Example:
 ```go
 func TestFetchArticles(t *testing.T) {
-	httpmock.Activate()
+	httpmock.Activate(&http.DefaultTransport)
 	defer httpmock.DeactivateAndReset()
 
 	// our database of articles
