@@ -10,7 +10,7 @@ import (
 var testUrl = "http://www.example.com/"
 
 func TestMockTransport(t *testing.T) {
-	Activate()
+	Activate(&http.DefaultTransport)
 	defer Deactivate()
 
 	url := "https://github.com/"
@@ -62,7 +62,7 @@ func TestMockTransportReset(t *testing.T) {
 }
 
 func TestMockTransportNoResponder(t *testing.T) {
-	Activate()
+	Activate(&http.DefaultTransport)
 	defer DeactivateAndReset()
 
 	Reset()
@@ -93,7 +93,7 @@ func TestMockTransportNoResponder(t *testing.T) {
 }
 
 func TestMockTransportQuerystringFallback(t *testing.T) {
-	Activate()
+	Activate(&http.DefaultTransport)
 	defer DeactivateAndReset()
 
 	// register the testUrl responder
@@ -127,7 +127,7 @@ func TestMockTransportInitialTransport(t *testing.T) {
 	tripper := &dummyTripper{}
 	http.DefaultTransport = tripper
 
-	Activate()
+	Activate(&http.DefaultTransport)
 
 	if http.DefaultTransport == tripper {
 		t.Fatal("expected http.DefaultTransport to be a mock transport")

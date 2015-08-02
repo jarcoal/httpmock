@@ -98,6 +98,9 @@ var DefaultTransport = NewMockTransport()
 // when Deactivate is called.
 var InitialTransport = http.DefaultTransport
 
+// PointerToTransport is a pointer to the transport object we want to manipulate
+var PointerToTransport *http.RoundTripper
+
 // Activate starts the mock environment.  This should be called before your tests run.  Under the
 // hood this replaces the Transport on the http.DefaultClient with DefaultTransport.
 //
@@ -111,18 +114,19 @@ var InitialTransport = http.DefaultTransport
 // 		func init() {
 // 			httpmock.Activate()
 // 		}
-func Activate() {
+func Activate(transport *http.RoundTripper) {
 	if Disabled() {
 		return
 	}
 
 	// make sure that if Activate is called multiple times it doesn't overwrite the InitialTransport
 	// with a mock transport.
-	if http.DefaultTransport != DefaultTransport {
-		InitialTransport = http.DefaultTransport
+	if *transport != DefaultTransport {
+		InitialTransport = *transport
+		PointerToTransport = transport
 	}
 
-	http.DefaultTransport = DefaultTransport
+	*transport = DefaultTransport
 }
 
 // Deactivate shuts down the mock environment.  Any HTTP calls made after this will use a live
@@ -139,7 +143,9 @@ func Deactivate() {
 	if Disabled() {
 		return
 	}
-	http.DefaultTransport = InitialTransport
+	if PointerToTransport != nil {
+		*PointerToTransport = InitialTransport
+	}
 }
 
 // Reset will remove any registered mocks and return the mock environment to it's initial state.
