@@ -13,7 +13,10 @@ import (
 // ResponderFromResponse wraps an *http.Response in a Responder
 func ResponderFromResponse(resp *http.Response) Responder {
 	return func(req *http.Request) (*http.Response, error) {
-		return resp, nil
+		res := new(http.Response)
+		*res = *resp
+		res.Request = req
+		return res, nil
 	}
 }
 
