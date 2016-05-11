@@ -7,14 +7,14 @@ import (
 	"github.com/goware/urlx"
 )
 
-// StubbedRequest is used to capture data about a new stubbed request. It wraps
+// StubRequest is used to capture data about a new stubbed request. It wraps
 // up the Method and URL along with optional http.Header struct, and also holds
 // the Responder.
-type StubbedRequest struct {
+type StubRequest struct {
 	Method    string
 	URL       string
 	Header    *http.Header
-	Responder *Responder
+	Responder Responder
 }
 
 // normalizedKey is a helper function that returns a normalized key for a

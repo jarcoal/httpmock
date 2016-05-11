@@ -18,7 +18,47 @@ func TestMockTransport(t *testing.T) {
 	url := "https://github.com/"
 	body := "hello world"
 
-	RegisterResponder("GET", url, NewStringResponder(200, body))
+	RegisterStubRequest(&StubRequest{
+		Method:    "GET",
+		URL:       url,
+		Responder: NewStringResponder(200, body),
+	})
+
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(data) != body {
+		t.FailNow()
+	}
+
+	// the http client wraps our NoResponderFound error, so we just try and match on text
+	if _, err := http.Get(testUrl); !strings.Contains(err.Error(),
+		NoResponderFound.Error()) {
+
+		t.Fatal(err)
+	}
+}
+
+func TestMockTransportCaseInsensitive(t *testing.T) {
+	Activate()
+	defer Deactivate()
+
+	url := "https://github.com/"
+	body := "hello world"
+
+	RegisterStubRequest(&StubRequest{
+		Method:    "get",
+		URL:       url,
+		Responder: NewStringResponder(200, body),
+	})
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -46,20 +86,24 @@ func TestMockTransport(t *testing.T) {
 func TestMockTransportReset(t *testing.T) {
 	DeactivateAndReset()
 
-	if len(DefaultTransport.responders) > 0 {
+	if len(DefaultTransport.requests) > 0 {
 		t.Fatal("expected no responders at this point")
 	}
 
-	RegisterResponder("GET", testUrl, nil)
+	RegisterStubRequest(&StubRequest{
+		Method:    "GET",
+		URL:       testUrl,
+		Responder: nil,
+	})
 
-	if len(DefaultTransport.responders) != 1 {
-		t.Fatal("expected one responder")
+	if len(DefaultTransport.requests) != 1 {
+		t.Fatal("expected one stubbed request")
 	}
 
 	Reset()
 
-	if len(DefaultTransport.responders) > 0 {
-		t.Fatal("expected no responders as they were just reset")
+	if len(DefaultTransport.requests) > 0 {
+		t.Fatal("expected no stubbed requests as they were just reset")
 	}
 }
 
@@ -99,7 +143,11 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 	defer DeactivateAndReset()
 
 	// register the testUrl responder
-	RegisterResponder("GET", testUrl, NewStringResponder(200, "hello world"))
+	RegisterStubRequest(&StubRequest{
+		Method:    "GET",
+		URL:       testUrl,
+		Responder: NewStringResponder(200, "hello world"),
+	})
 
 	// make a request for the testUrl with a querystring
 	resp, err := http.Get(testUrl + "?hello=world")
@@ -122,7 +170,11 @@ func TestMockTransportWithQuerystring(t *testing.T) {
 	defer DeactivateAndReset()
 
 	// register a responder with query parameters
-	RegisterResponder("GET", testUrl+"?first=val&second=val", NewStringResponder(200, "hello world"))
+	RegisterStubRequest(&StubRequest{
+		Method:    "GET",
+		URL:       testUrl + "?first=val&second=val",
+		Responder: NewStringResponder(200, "hello world"),
+	})
 
 	// should error if no parameters passed
 	if _, err := http.Get(testUrl); err == nil {
@@ -193,7 +245,11 @@ func TestMockTransportNonDefault(t *testing.T) {
 
 	body := "hello world!"
 
-	RegisterResponder("GET", testUrl, NewStringResponder(200, body))
+	RegisterStubRequest(&StubRequest{
+		Method:    "GET",
+		URL:       testUrl,
+		Responder: NewStringResponder(200, body),
+	})
 
 	req, err := http.NewRequest("GET", testUrl, nil)
 	if err != nil {

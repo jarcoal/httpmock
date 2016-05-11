@@ -4,8 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-
-	"github.com/goware/urlx"
 )
 
 // Responders are callbacks that receive and http request and return a mocked response.
@@ -22,14 +20,14 @@ func ConnectionFailure(*http.Request) (*http.Response, error) {
 
 // NewMockTransport creates a new *MockTransport with no responders.
 func NewMockTransport() *MockTransport {
-	return &MockTransport{make(map[string]Responder), nil}
+	return &MockTransport{make(map[string]*StubRequest), nil}
 }
 
 // MockTransport implements http.RoundTripper, which fulfills single http requests issued by
 // an http.Client.  This implementation doesn't actually make the call, instead deferring to
-// the registered list of responders.
+// the registered list of stubbed requests.
 type MockTransport struct {
-	responders  map[string]Responder
+	requests    map[string]*StubRequest
 	noResponder Responder
 }
 
@@ -37,23 +35,23 @@ type MockTransport struct {
 // implement the http.RoundTripper interface.  You will not interact with this directly, instead
 // the *http.Client you are using will call it for you.
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	url, err := urlx.Normalize(req.URL)
+	key, err := normalizedKey(req.Method, req.URL.String())
 	if err != nil {
 		return nil, err
 	}
 
 	// try and get a responder that matches the method and URL
-	responder := m.responderForKey(req.Method + " " + url)
+	stub := m.stubRequestForKey(key)
 
 	// if we weren't able to find a responder and the URL contains a querystring
 	// then we strip off the querystring and try again.
-	if responder == nil && strings.Contains(url, "?") {
-		responder = m.responderForKey(req.Method + " " + strings.Split(url, "?")[0])
+	if stub == nil && strings.Contains(key, "?") {
+		stub = m.stubRequestForKey(strings.Split(key, "?")[0])
 	}
 
-	// if we found a responder, call it
-	if responder != nil {
-		return responder(req)
+	// if we found a stub, call it's responder
+	if stub != nil {
+		return stub.Responder(req)
 	}
 
 	// we didn't find a responder, so fire the 'no responder' responder
@@ -66,31 +64,21 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // do nothing with timeout
 func (m *MockTransport) CancelRequest(req *http.Request) {}
 
-// responderForKey returns a responder for a given key
-func (m *MockTransport) responderForKey(key string) Responder {
-	for k, r := range m.responders {
-		if k != key {
-			continue
-		}
-		return r
-	}
-	return nil
+// stubRequestForKey returns a stubbed requests for a given key
+func (m *MockTransport) stubRequestForKey(key string) *StubRequest {
+	return m.requests[key]
 }
 
-// RegisterResponder adds a new responder, associated with a given HTTP method and URL.  When a
-// request comes in that matches, the responder will be called and the response returned to the client.
-func (m *MockTransport) RegisterResponder(method, url string, responder Responder) error {
-	u, err := urlx.Parse(url)
+// RegisterStubRequest adds a new responder, associated with a given stubbed
+// request. When a request comes in that matches, the responder will be called
+// and the response returned to the client.
+func (m *MockTransport) RegisterStubRequest(request *StubRequest) error {
+	key, err := normalizedKey(request.Method, request.URL)
 	if err != nil {
 		return err
 	}
 
-	normalized, err := urlx.Normalize(u)
-	if err != nil {
-		return err
-	}
-
-	m.responders[method+" "+normalized] = responder
+	m.requests[key] = request
 
 	return nil
 }
@@ -103,12 +91,12 @@ func (m *MockTransport) RegisterNoResponder(responder Responder) {
 
 // Reset removes all registered responders (including the no responder) from the MockTransport
 func (m *MockTransport) Reset() {
-	m.responders = make(map[string]Responder)
+	m.requests = make(map[string]*StubRequest)
 	m.noResponder = nil
 }
 
 // DefaultTransport is the default mock transport used by Activate, Deactivate, Reset,
-// DeactivateAndReset, RegisterResponder, and RegisterNoResponder.
+// DeactivateAndReset, RegisterStubRequest, and RegisterNoResponder.
 var DefaultTransport = NewMockTransport()
 
 // InitialTransport is a cache of the original transport used so we can put it back
@@ -198,7 +186,7 @@ func DeactivateAndReset() {
 	Reset()
 }
 
-// RegisterResponder adds a mock that will catch requests to the given HTTP method and URL, then
+// RegisterStubRequest adds a mock that will catch requests to the given HTTP method and URL, then
 // route them to the Responder which will generate a response to be returned to the client.
 //
 // Example:
@@ -206,13 +194,16 @@ func DeactivateAndReset() {
 // 			httpmock.Activate()
 // 			httpmock.DeactivateAndReset()
 //
-// 			httpmock.RegisterResponder("GET", "http://example.com/",
-// 				httpmock.NewStringResponder("hello world", 200))
+// 			httpmock.RegisterStubRequest(&StubRequest{
+// 				Method: "GET",
+// 				URL: "http://example.com",
+// 				Responder: httpmock.NewStringResponder("hello world", 200),
+//			})
 //
 //			// requests to http://example.com/ will now return 'hello world'
 // 		}
-func RegisterResponder(method, url string, responder Responder) {
-	DefaultTransport.RegisterResponder(method, url, responder)
+func RegisterStubRequest(request *StubRequest) {
+	DefaultTransport.RegisterStubRequest(request)
 }
 
 // RegisterNoResponder adds a mock that will be called whenever a request for an unregistered URL
