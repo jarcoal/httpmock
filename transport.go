@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+
+	"github.com/goware/urlx"
 )
 
 // Responders are callbacks that receive and http request and return a mocked response.
@@ -35,7 +37,10 @@ type MockTransport struct {
 // implement the http.RoundTripper interface.  You will not interact with this directly, instead
 // the *http.Client you are using will call it for you.
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	url := req.URL.String()
+	url, err := urlx.Normalize(req.URL)
+	if err != nil {
+		return nil, err
+	}
 
 	// try and get a responder that matches the method and URL
 	responder := m.responderForKey(req.Method + " " + url)
@@ -74,8 +79,20 @@ func (m *MockTransport) responderForKey(key string) Responder {
 
 // RegisterResponder adds a new responder, associated with a given HTTP method and URL.  When a
 // request comes in that matches, the responder will be called and the response returned to the client.
-func (m *MockTransport) RegisterResponder(method, url string, responder Responder) {
-	m.responders[method+" "+url] = responder
+func (m *MockTransport) RegisterResponder(method, url string, responder Responder) error {
+	u, err := urlx.Parse(url)
+	if err != nil {
+		return err
+	}
+
+	normalized, err := urlx.Normalize(u)
+	if err != nil {
+		return err
+	}
+
+	m.responders[method+" "+normalized] = responder
+
+	return nil
 }
 
 // RegisterNoResponder is used to register a responder that will be called if no other responder is
