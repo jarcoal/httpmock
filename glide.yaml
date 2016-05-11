@@ -1,0 +1,3 @@
+package: github.com/smulube/httpmock
+import:
+- package: github.com/goware/urlx

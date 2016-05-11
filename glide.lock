@@ -1,0 +1,14 @@
+hash: 5f25851f51584dcc9178ad1155632e9daa8a711898489327999c9886cc16ef28
+updated: 2016-05-11T22:24:45.901023892+01:00
+imports:
+- name: github.com/goware/urlx
+  version: 86bdc24560383254e8b977da31a823eddf904409
+- name: github.com/opennota/urlesc
+  version: 5fa9ff0392746aeae1c4b37fcc42c65afa7a9587
+- name: github.com/PuerkitoBio/purell
+  version: d69616f51cdfcd7514d6a380847a152dfc2a749d
+- name: golang.org/x/net
+  version: 96dbb961a39ddccf16860cdd355bfa639c497f23
+  subpackages:
+  - idna
+devImports: []
