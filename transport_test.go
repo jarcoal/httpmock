@@ -184,3 +184,53 @@ func TestMockTransportNonDefault(t *testing.T) {
 		t.FailNow()
 	}
 }
+
+func TestMockTransportRespectsCancel(t *testing.T) {
+	Activate()
+	defer DeactivateAndReset()
+
+	RegisterResponder(
+		"GET", testUrl,
+		func(r *http.Request) (*http.Response, error) {
+			time.Sleep(time.Millisecond)
+			return NewStringResponse(http.StatusOK, ""), nil
+		},
+	)
+
+	req, err := http.NewRequest("GET", testUrl, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cancel := make(chan struct{}, 1)
+	req.Cancel = cancel
+	cancel <- struct{}{}
+
+	_, err = http.DefaultClient.Do(req)
+	if err == nil {
+		t.Fail()
+	}
+}
+
+func TestMockTransportRespectsTimeout(t *testing.T) {
+	timeout := time.Millisecond
+	client := &http.Client{
+		Timeout: timeout,
+	}
+
+	ActivateNonDefault(client)
+	defer DeactivateAndReset()
+
+	RegisterResponder(
+		"GET", testUrl,
+		func(r *http.Request) (*http.Response, error) {
+			time.Sleep(2 * timeout)
+			return NewStringResponse(http.StatusOK, ""), nil
+		},
+	)
+
+	_, err := client.Get(testUrl)
+	if err == nil {
+		t.Fail()
+	}
+}
