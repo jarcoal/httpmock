@@ -2,30 +2,36 @@ package httpmock
 
 import (
 	"net/http"
+	"strings"
 )
 
 // NewStubRequest is a constructor function that returns a StubRequest for the
 // given method and url. We also supply a responder which actually generates
 // the response should the stubbed request match the request.
-func NewStubRequest(method, url string, responder Responder) *StubRequest {
-	return &StubRequest{
-		Method:    method,
-		URL:       url,
-		Responder: responder,
-	}
+func NewStubRequest(method, url string, responder Responder) (*StubRequest, error) {
+	return NewStubRequestWithHeaders(
+		method,
+		url,
+		nil,
+		responder)
 }
 
 // NewStubRequestWithHeaders is a constructor function that returns a
 // StubRequest for the given method and url provided the request contains the
 // supplied headers. We also supply a responder which actually generates the
 // response should the stubbed request match the request.
-func NewStubRequestWithHeaders(method, url string, header *http.Header, responder Responder) *StubRequest {
+func NewStubRequestWithHeaders(method, url string, header *http.Header, responder Responder) (*StubRequest, error) {
+	normalized, err := normalizeURL(url)
+	if err != nil {
+		return nil, err
+	}
+
 	return &StubRequest{
 		Method:    method,
-		URL:       url,
+		URL:       normalized,
 		Header:    header,
 		Responder: responder,
-	}
+	}, nil
 }
 
 // StubRequest is used to capture data about a new stubbed request. It wraps up
@@ -40,7 +46,18 @@ type StubRequest struct {
 	Called    bool
 }
 
-// Matches is a test function that returns true if an incoming request is matched by this fetcher.
+// Matches is a test function that returns true if an incoming request is
+// matched by this fetcher. Should an incoming request URL cause an error when
+// normalized, we return false.
 func (r *StubRequest) Matches(req *http.Request) bool {
-	return false
+	methodMatch := strings.ToUpper(req.Method) == strings.ToUpper(r.Method)
+
+	normalized, err := normalizeURL(req.URL.String())
+	if err != nil {
+		return false
+	}
+
+	urlMatch := normalized == r.URL
+
+	return methodMatch && urlMatch
 }
