@@ -189,6 +189,11 @@ func TestMockTransportWithQuerystring(t *testing.T) {
 		t.Fatal("expected to receive a connection error due to lack of responders")
 	}
 
+	// should error if more parameters passed
+	if _, err := http.Get(testUrl + "?first=val&second=val&third=val"); err == nil {
+		t.Fatal("expected to receive a connection error due to lack of responders")
+	}
+
 	// should not error if both parameters are sent
 	_, err := http.Get(testUrl + "?first=val&second=val")
 	if err != nil {

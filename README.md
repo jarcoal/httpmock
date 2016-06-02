@@ -7,13 +7,18 @@ func TestFetchArticles(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterStubRequest(&httpmock.StubRequest{
-    Method: "GET",
-    URL: "https://api.mybiz.com/articles.json",
-		Responder: httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`),
-  })
+	httpmock.RegisterStubRequest(httpmock.NewStubRequest(
+    "GET",
+    "https://api.mybiz.com/articles.json",
+		httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`),
+  ))
 
 	// do stuff that makes a request to articles.json
+
+  // verify all registered stubs were called
+  if err := httpmock.AllStubsWereCalled(); err != nil {
+    t.Errorf("Not all stubs were called: %s", err)
+  }
 }
 ```
 
