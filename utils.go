@@ -18,3 +18,15 @@ func normalizeURL(url string) (string, error) {
 
 	return normalized, nil
 }
+
+// contains is a simple function that checks for the presence of a string value
+// within a slice of strings
+func contains(values []string, value string) bool {
+	for _, v := range values {
+		if v == value {
+			return true
+		}
+	}
+
+	return false
+}

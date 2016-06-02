@@ -52,6 +52,10 @@ type StubRequest struct {
 func (r *StubRequest) Matches(req *http.Request) bool {
 	methodMatch := strings.ToUpper(req.Method) == strings.ToUpper(r.Method)
 
+	if !methodMatch {
+		return methodMatch
+	}
+
 	normalized, err := normalizeURL(req.URL.String())
 	if err != nil {
 		return false
@@ -59,5 +63,31 @@ func (r *StubRequest) Matches(req *http.Request) bool {
 
 	urlMatch := normalized == r.URL
 
-	return methodMatch && urlMatch
+	if !urlMatch {
+		return urlMatch
+	}
+
+	headerMatch := true
+
+	// only check headers if the stubbed request has set headers to some not nil
+	// value
+	if r.Header != nil {
+
+	Loop:
+		// for each header defined on the stub, iterate through all the values and
+		// make sure they are present in the corresponding header on the request
+		for header, stubValues := range map[string][]string(*r.Header) {
+			// get the values for this header on the request
+			reqValues := req.Header[header]
+
+			for _, v := range stubValues {
+				if !contains(reqValues, v) {
+					headerMatch = false
+					break Loop
+				}
+			}
+		}
+	}
+
+	return headerMatch
 }
