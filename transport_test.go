@@ -138,33 +138,6 @@ func TestMockTransportNoResponder(t *testing.T) {
 	}
 }
 
-func TestMockTransportQuerystringFallback(t *testing.T) {
-	Activate()
-	defer DeactivateAndReset()
-
-	// register the testUrl responder
-	RegisterStubRequest(&StubRequest{
-		Method:    "GET",
-		URL:       testUrl,
-		Responder: NewStringResponder(200, "hello world"),
-	})
-
-	// make a request for the testUrl with a querystring
-	resp, err := http.Get(testUrl + "?hello=world")
-	if err != nil {
-		t.Fatal("expected request to succeed")
-	}
-
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if string(data) != "hello world" {
-		t.Fatal("expected body to be 'hello world'")
-	}
-}
-
 func TestMockTransportWithQuerystring(t *testing.T) {
 	Activate()
 	defer DeactivateAndReset()
