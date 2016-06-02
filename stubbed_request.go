@@ -42,5 +42,5 @@ type StubRequest struct {
 
 // Matches is a test function that returns true if an incoming request is matched by this fetcher.
 func (r *StubRequest) Matches(req *http.Request) bool {
-
+	return false
 }

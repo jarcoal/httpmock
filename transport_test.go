@@ -86,7 +86,7 @@ func TestMockTransportCaseInsensitive(t *testing.T) {
 func TestMockTransportReset(t *testing.T) {
 	DeactivateAndReset()
 
-	if len(DefaultTransport.requests) > 0 {
+	if len(DefaultTransport.stubs) > 0 {
 		t.Fatal("expected no responders at this point")
 	}
 
@@ -96,13 +96,13 @@ func TestMockTransportReset(t *testing.T) {
 		Responder: nil,
 	})
 
-	if len(DefaultTransport.requests) != 1 {
+	if len(DefaultTransport.stubs) != 1 {
 		t.Fatal("expected one stubbed request")
 	}
 
 	Reset()
 
-	if len(DefaultTransport.requests) > 0 {
+	if len(DefaultTransport.stubs) > 0 {
 		t.Fatal("expected no stubbed requests as they were just reset")
 	}
 }

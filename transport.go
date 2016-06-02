@@ -2,8 +2,8 @@ package httpmock
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
-	"strings"
 )
 
 // Responders are callbacks that receive and http request and return a mocked response.
@@ -39,7 +39,7 @@ func ConnectionFailure(*http.Request) (*http.Response, error) {
 // NewMockTransport creates a new *MockTransport with no stubbed requests.
 func NewMockTransport() *MockTransport {
 	return &MockTransport{
-		make([]*StubRequest),
+		make([]*StubRequest, 0),
 		nil,
 	}
 }
@@ -48,7 +48,7 @@ func NewMockTransport() *MockTransport {
 // an http.Client.  This implementation doesn't actually make the call, instead deferring to
 // the registered list of stubbed requests.
 type MockTransport struct {
-	stubs       []StubRequest
+	stubs       []*StubRequest
 	noResponder Responder
 }
 
@@ -106,7 +106,7 @@ func (m *MockTransport) RegisterNoResponder(responder Responder) {
 // Reset removes all registered responders (including the no responder) from
 // the MockTransport
 func (m *MockTransport) Reset() {
-	m.stubs = make([]*StubRequest)
+	m.stubs = make([]*StubRequest, 0)
 	m.noResponder = nil
 }
 
