@@ -1,6 +1,8 @@
 package httpmock
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"testing"
 )
@@ -45,15 +47,11 @@ func TestMatches(t *testing.T) {
 	}
 
 	for _, testcase := range testcases {
-		stub, err := NewStubRequest(
+		stub := NewStubRequest(
 			testcase.method,
 			testcase.url,
 			NewStringResponder(200, "ok"),
 		)
-
-		if err != nil {
-			t.Fatalf("Unexpected error, got %#v", err)
-		}
 
 		req, err := http.NewRequest("GET", testcase.requestURL, nil)
 		if err != nil {
@@ -115,16 +113,11 @@ func TestMatchesWithHeaders(t *testing.T) {
 	}
 
 	for _, testcase := range testcases {
-		stub, err := NewStubRequestWithHeaders(
+		stub := NewStubRequest(
 			testcase.method,
 			testcase.stubUrl,
-			testcase.stubHeaders,
 			NewStringResponder(200, "ok"),
-		)
-
-		if err != nil {
-			t.Fatalf("Unexpected error, got %#v", err)
-		}
+		).WithHeaders(testcase.stubHeaders)
 
 		req, err := http.NewRequest("GET", testcase.requestURL, nil)
 		if err != nil {
@@ -132,6 +125,51 @@ func TestMatchesWithHeaders(t *testing.T) {
 		}
 
 		req.Header = testcase.requestHeaders
+
+		if stub.Matches(req) != testcase.match {
+			t.Errorf("Unexpected result expected '%#v', got '%#v' for %s", testcase.match, stub.Matches(req), testcase.stubUrl)
+		}
+	}
+}
+
+func TestRequestWithBody(t *testing.T) {
+	testcases := []struct {
+		method      string
+		stubUrl     string
+		body        io.Reader
+		requestURL  string
+		requestBody io.Reader
+		match       bool
+	}{
+		{
+			"POST",
+			"http://example.com",
+			bytes.NewBufferString("foo=val"),
+			"http://example.com",
+			bytes.NewBufferString("foo=val"),
+			true,
+		},
+		{
+			"POST",
+			"http://example.com",
+			bytes.NewBufferString("foo=val"),
+			"http://example.com",
+			bytes.NewBufferString("bar=val"),
+			false,
+		},
+	}
+
+	for _, testcase := range testcases {
+		stub := NewStubRequest(
+			testcase.method,
+			testcase.stubUrl,
+			NewStringResponder(200, "ok"),
+		).WithBody(testcase.body)
+
+		req, err := http.NewRequest(testcase.method, testcase.requestURL, testcase.requestBody)
+		if err != nil {
+			t.Fatalf("Unexpected error, got %#v", err)
+		}
 
 		if stub.Matches(req) != testcase.match {
 			t.Errorf("Unexpected result expected '%#v', got '%#v' for %s", testcase.match, stub.Matches(req), testcase.stubUrl)

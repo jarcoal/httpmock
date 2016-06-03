@@ -1,6 +1,8 @@
 package httpmock
 
 import (
+	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -8,30 +10,12 @@ import (
 // NewStubRequest is a constructor function that returns a StubRequest for the
 // given method and url. We also supply a responder which actually generates
 // the response should the stubbed request match the request.
-func NewStubRequest(method, url string, responder Responder) (*StubRequest, error) {
-	return NewStubRequestWithHeaders(
-		method,
-		url,
-		nil,
-		responder)
-}
-
-// NewStubRequestWithHeaders is a constructor function that returns a
-// StubRequest for the given method and url provided the request contains the
-// supplied headers. We also supply a responder which actually generates the
-// response should the stubbed request match the request.
-func NewStubRequestWithHeaders(method, url string, header *http.Header, responder Responder) (*StubRequest, error) {
-	normalized, err := normalizeURL(url)
-	if err != nil {
-		return nil, err
-	}
-
+func NewStubRequest(method, url string, responder Responder) *StubRequest {
 	return &StubRequest{
 		Method:    method,
-		URL:       normalized,
-		Header:    header,
+		URL:       url,
 		Responder: responder,
-	}, nil
+	}
 }
 
 // StubRequest is used to capture data about a new stubbed request. It wraps up
@@ -42,8 +26,21 @@ type StubRequest struct {
 	Method    string
 	URL       string
 	Header    *http.Header
+	Body      io.Reader
 	Responder Responder
 	Called    bool
+}
+
+// WithHeaders is a function used to add http headers onto a stubbed request.
+func (r *StubRequest) WithHeaders(header *http.Header) *StubRequest {
+	r.Header = header
+	return r
+}
+
+// WithBody is a function used to add a body to a stubbed request
+func (r *StubRequest) WithBody(body io.Reader) *StubRequest {
+	r.Body = body
+	return r
 }
 
 // Matches is a test function that returns true if an incoming request is
@@ -56,12 +53,17 @@ func (r *StubRequest) Matches(req *http.Request) bool {
 		return methodMatch
 	}
 
-	normalized, err := normalizeURL(req.URL.String())
+	normalizedURL, err := normalizeURL(r.URL)
 	if err != nil {
 		return false
 	}
 
-	urlMatch := normalized == r.URL
+	normalizedReqUrl, err := normalizeURL(req.URL.String())
+	if err != nil {
+		return false
+	}
+
+	urlMatch := normalizedURL == normalizedReqUrl
 
 	if !urlMatch {
 		return urlMatch
@@ -89,5 +91,27 @@ func (r *StubRequest) Matches(req *http.Request) bool {
 		}
 	}
 
-	return headerMatch
+	if !headerMatch {
+		return headerMatch
+	}
+
+	bodyMatch := true
+
+	// if our stub includes a body, then it should equal the actual request body
+	// to match
+	if r.Body != nil {
+		stubBody, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			return false
+		}
+
+		requestBody, err := ioutil.ReadAll(req.Body)
+		if err != nil {
+			return false
+		}
+
+		bodyMatch = string(stubBody) == string(requestBody)
+	}
+
+	return bodyMatch
 }
