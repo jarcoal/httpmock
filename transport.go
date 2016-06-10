@@ -6,11 +6,13 @@ import (
 	"net/http"
 )
 
-// Responders are callbacks that receive and http request and return a mocked response.
+// Responder types are callbacks that receive and http request and return a
+// mocked response.
 type Responder func(*http.Request) (*http.Response, error)
 
-// NoResponderFound is returned when no responders are found for a given HTTP method and URL.
-var NoResponderFound = errors.New("no responder found")
+// ErrNoResponderFound is returned when no responders are found for a given
+// HTTP method and URL.
+var ErrNoResponderFound = errors.New("no responder found")
 
 // StubNotCalled is a type implementing the error interface we return when a
 // stub has not been called
@@ -33,7 +35,7 @@ func NewStubNotCalled(stub *StubRequest) *StubNotCalled {
 // ConnectionFailure is a responder that returns a connection failure.  This is the default
 // responder, and is called when no other matching responder is found.
 func ConnectionFailure(*http.Request) (*http.Response, error) {
-	return nil, NoResponderFound
+	return nil, ErrNoResponderFound
 }
 
 // NewMockTransport creates a new *MockTransport with no stubbed requests.
@@ -56,38 +58,40 @@ type MockTransport struct {
 // implement the http.RoundTripper interface.  You will not interact with this directly, instead
 // the *http.Client you are using will call it for you.
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// try and get a responder that matches the given reque and URL
-	stub := m.stubForRequest(req)
 
-	// if we found a stub, call it's responder
-	if stub != nil {
-		// mark this stub as having been performed
-		stub.Called = true
-
-		return stub.Responder(req)
+	// try and get a responder that matches the given request
+	stub, err := m.stubForRequest(req)
+	// we didn't find a responder so fire the 'no responder' responder
+	if err != nil {
+		if m.noResponder == nil {
+			return ConnectionFailure(req)
+		}
+		return m.noResponder(req)
 	}
 
-	// we didn't find a responder, so fire the 'no responder' responder
-	if m.noResponder == nil {
-		return ConnectionFailure(req)
-	}
-	return m.noResponder(req)
+	// mark this stub as having been performed
+	stub.Called = true
+
+	return stub.Responder(req)
 }
 
-// do nothing with timeout
+// CancelRequest does nothing with timeout
 func (m *MockTransport) CancelRequest(req *http.Request) {}
 
 // stubForRequest returns the first matching stub for the incoming request
 // object or nil if no stub claims to be a match
-func (m *MockTransport) stubForRequest(req *http.Request) *StubRequest {
+func (m *MockTransport) stubForRequest(req *http.Request) (*StubRequest, error) {
+	var err error
+
 	// find the first stub that matches the request
 	for _, stub := range m.stubs {
-		if stub.Matches(req) {
-			return stub
+		err = stub.Matches(req)
+		if err == nil {
+			return stub, nil
 		}
 	}
 
-	return nil
+	return nil, ErrNoResponderFound
 }
 
 // RegisterStubRequest adds a new responder, associated with a given stubbed
@@ -180,8 +184,8 @@ func ActivateNonDefault(client *http.Client) {
 	client.Transport = DefaultTransport
 }
 
-// Deactivate shuts down the mock environment.  Any HTTP calls made after this will use a live
-// transport.
+// Deactivate shuts down the mock environment.  Any HTTP calls made after this
+// will use a live transport.
 //
 // Usually you'll call it in a defer right after activating the mock environment:
 // 		func TestFetchArticles(t *testing.T) {
@@ -202,42 +206,32 @@ func Deactivate() {
 	}
 }
 
-// Reset will remove any registered mocks and return the mock environment to it's initial state.
+// Reset will remove any registered mocks and return the mock environment to
+// it's initial state.
 func Reset() {
 	DefaultTransport.Reset()
 }
 
-// DeactivateAndReset is just a convenience method for calling Deactivate() and then Reset()
-// Happy deferring!
+// DeactivateAndReset is just a convenience method for calling Deactivate() and
+// then Reset() Happy deferring!
 func DeactivateAndReset() {
 	Deactivate()
 	Reset()
 }
 
-// RegisterStubRequest adds a mock that will catch requests to the given HTTP method and URL, then
-// route them to the Responder which will generate a response to be returned to the client.
-//
-// Example:
-// 		func TestFetchArticles(t *testing.T) {
-// 			httpmock.Activate()
-// 			defer httpmock.DeactivateAndReset()
-//
-// 			httpmock.RegisterStubRequest(&StubRequest{
-// 				Method: "GET",
-// 				URL: "http://example.com",
-// 				Responder: httpmock.NewStringResponder("hello world", 200),
-//			})
-//
-//			// requests to http://example.com/ will now return 'hello world'
-// 		}
+// RegisterStubRequest adds a mock that will catch requests to the given HTTP
+// method and URL, then route them to the Responder which will generate a
+// response to be returned to the client.
 func RegisterStubRequest(request *StubRequest) {
 	DefaultTransport.RegisterStubRequest(request)
 }
 
-// RegisterNoResponder adds a mock that will be called whenever a request for an unregistered URL
-// is received.  The default behavior is to return a connection error.
+// RegisterNoResponder adds a mock that will be called whenever a request for
+// an unregistered URL is received.  The default behavior is to return a
+// connection error.
 //
-// In some cases you may not want all URLs to be mocked, in which case you can do this:
+// In some cases you may not want all URLs to be mocked, in which case you can
+// do this:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
 // 			defer httpmock.DeactivateAndReset()
@@ -255,22 +249,6 @@ func RegisterNoResponder(responder Responder) {
 // something is wrong in your test, or a waste of time.  This function retuns
 // an error unless all currently registered stubs were called.
 //
-// Example:
-// 		func TestFetchArticles(t *testing.T) {
-// 			httpmock.Activate()
-// 			defer httpmock.DeactivateAndReset()
-//
-// 			httpmock.RegisterStubRequest(&StubRequest{
-// 				Method: "GET",
-// 				URL: "http://example.com",
-// 				Responder: httpmock.NewStringResponder("hello world", 200),
-//			})
-//
-//			// requests to http://example.com/ will now return 'hello world'
-//			if err := httpmock.AllStubsCalled(); err != nil {
-//				t.Errorf("Not all stubs were called: %s", err)
-//			}
-// 		}
 func AllStubsCalled() error {
 	return DefaultTransport.AllStubsCalled()
 }

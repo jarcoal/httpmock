@@ -49,9 +49,9 @@ func NewBytesResponder(status int, body []byte) Responder {
 	return ResponderFromResponse(NewBytesResponse(status, body))
 }
 
-// NewJsonResponse creates an *http.Response with a body that is a json encoded representation of
+// NewJSONResponse creates an *http.Response with a body that is a json encoded representation of
 // the given interface{}.  Also accepts an http status code.
-func NewJsonResponse(status int, body interface{}) (*http.Response, error) {
+func NewJSONResponse(status int, body interface{}) (*http.Response, error) {
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -61,19 +61,19 @@ func NewJsonResponse(status int, body interface{}) (*http.Response, error) {
 	return response, nil
 }
 
-// NewJsonResponder creates a Responder from a given body (as an interface{} that is encoded to
+// NewJSONResponder creates a Responder from a given body (as an interface{} that is encoded to
 // json) and status code.
-func NewJsonResponder(status int, body interface{}) (Responder, error) {
-	resp, err := NewJsonResponse(status, body)
+func NewJSONResponder(status int, body interface{}) (Responder, error) {
+	resp, err := NewJSONResponse(status, body)
 	if err != nil {
 		return nil, err
 	}
 	return ResponderFromResponse(resp), nil
 }
 
-// NewXmlResponse creates an *http.Response with a body that is an xml encoded representation
-// of the given interface{}.  Also accepts an http status code.
-func NewXmlResponse(status int, body interface{}) (*http.Response, error) {
+// NewXMLResponse creates an *http.Response with a body that is an xml encoded
+// representation of the given interface{}.  Also accepts an http status code.
+func NewXMLResponse(status int, body interface{}) (*http.Response, error) {
 	encoded, err := xml.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -83,18 +83,18 @@ func NewXmlResponse(status int, body interface{}) (*http.Response, error) {
 	return response, nil
 }
 
-// NewXmlResponder creates a Responder from a given body (as an interface{} that is encoded to xml)
-// and status code.
-func NewXmlResponder(status int, body interface{}) (Responder, error) {
-	resp, err := NewXmlResponse(status, body)
+// NewXMLResponder creates a Responder from a given body (as an interface{}
+// that is encoded to xml) and status code.
+func NewXMLResponder(status int, body interface{}) (Responder, error) {
+	resp, err := NewXMLResponse(status, body)
 	if err != nil {
 		return nil, err
 	}
 	return ResponderFromResponse(resp), nil
 }
 
-// NewRespBodyFromString creates an io.ReadCloser from a string that is suitable for use as an
-// http response body.
+// NewRespBodyFromString creates an io.ReadCloser from a string that is
+// suitable for use as an http response body.
 func NewRespBodyFromString(body string) io.ReadCloser {
 	return &dummyReadCloser{strings.NewReader(body)}
 }
