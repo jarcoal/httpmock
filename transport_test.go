@@ -2,6 +2,8 @@ package httpmock
 
 import (
 	"bytes"
+	"encoding/json"
+	"encoding/xml"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -13,13 +15,22 @@ import (
 var testURL = "http://www.example.com/"
 
 func TestMockTransport(t *testing.T) {
+	type schema struct {
+		Message string `xml:"message"`
+	}
+
 	Activate()
-	defer Deactivate()
+	defer DeactivateAndReset()
 
 	url := "https://github.com/"
-	body := "hello world"
+	body := &schema{"hello world"}
 
-	RegisterStubRequest(NewStubRequest("GET", url, NewStringResponder(200, body)))
+	responder, err := NewXMLResponder(200, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	RegisterStubRequest(NewStubRequest("GET", url, responder))
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -27,12 +38,12 @@ func TestMockTransport(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
+	checkBody := &schema{}
+	if err := xml.NewDecoder(resp.Body).Decode(checkBody); err != nil {
 		t.Fatal(err)
 	}
 
-	if string(data) != body {
+	if checkBody.Message != body.Message {
 		t.FailNow()
 	}
 
@@ -47,12 +58,12 @@ func TestMockTransport(t *testing.T) {
 
 func TestMockTransportCaseInsensitive(t *testing.T) {
 	Activate()
-	defer Deactivate()
+	defer DeactivateAndReset()
 
 	url := "https://github.com/"
-	body := "hello world"
+	body := []byte("hello world")
 
-	RegisterStubRequest(NewStubRequest("get", url, NewStringResponder(200, body)))
+	RegisterStubRequest(NewStubRequest("get", url, NewBytesResponder(200, body)))
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -65,7 +76,7 @@ func TestMockTransportCaseInsensitive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if string(data) != body {
+	if string(data) != string(body) {
 		t.FailNow()
 	}
 
@@ -78,28 +89,43 @@ func TestMockTransportCaseInsensitive(t *testing.T) {
 }
 
 func TestMockTransportAdvanced(t *testing.T) {
+	type schema struct {
+		Message string `json:"msg"`
+	}
+
 	Activate()
-	defer Deactivate()
+	defer DeactivateAndReset()
 
 	url := "https://github.com/banana/"
+
 	requestBody := `{"msg":"hello world"}`
 	requestHeader := &http.Header{
 		"X-ApiKey": []string{"api-key"},
 	}
-	responseBody := "ok"
+	responseBody := &schema{"ok"}
+
+	responder, err := NewJSONResponder(200, responseBody)
+	if err != nil {
+		t.Fatalf("Unexpected error constructing request: %#v", err)
+	}
 
 	RegisterStubRequest(
 		NewStubRequest(
 			"POST",
 			url,
-			NewStringResponder(200, responseBody),
-		).WithHeader(requestHeader).WithBody(bytes.NewBufferString(requestBody)))
+			responder,
+		).WithHeader(
+			requestHeader,
+		).WithBody(
+			bytes.NewBufferString(requestBody),
+		),
+	)
 
 	// should fail because missing stubbed header
-	//_, err := http.Post(url, "application/json", bytes.NewBufferString(requestBody))
-	//if err == nil {
-	//	t.Fatalf("POST request should have failed due to missing headers")
-	//}
+	_, err = http.Post(url, "application/json", bytes.NewBufferString(requestBody))
+	if err == nil {
+		t.Fatalf("POST request should have failed due to missing headers")
+	}
 
 	client := &http.Client{}
 
@@ -112,17 +138,22 @@ func TestMockTransportAdvanced(t *testing.T) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		t.Fatalf("Unexpected error when making request: %#v", err.Error())
+		t.Fatalf("Unexpected error when making request: %#v", err)
 	}
 	defer resp.Body.Close()
 
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
+	checkBody := &schema{}
+	if err := json.NewDecoder(resp.Body).Decode(checkBody); err != nil {
 		t.Fatal(err)
 	}
 
-	if string(data) != responseBody {
+	if checkBody.Message != responseBody.Message {
 		t.FailNow()
+	}
+
+	// verify that all stubs were called
+	if err := AllStubsCalled(); err != nil {
+		t.Errorf("Not all stubs were called: %s", err)
 	}
 }
 
