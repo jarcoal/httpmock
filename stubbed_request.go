@@ -92,8 +92,7 @@ func (r *StubRequest) Matches(req *http.Request) error {
 		// make sure they are present in the corresponding header on the request
 		for header, stubValues := range map[string][]string(*r.Header) {
 			// get the values for this header on the request
-			reqValues := req.Header[header]
-
+			reqValues := req.Header[http.CanonicalHeaderKey(header)]
 			for _, v := range stubValues {
 				if !contains(reqValues, v) {
 					return ErrIncorrectHeaders
