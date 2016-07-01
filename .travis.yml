@@ -5,6 +5,9 @@ go:
     - 1.6
     - 1.5
 
+env:
+    - GO15VENDOREXPERIMENT=1
+
 notifications:
     email: false
 
