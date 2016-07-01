@@ -23,3 +23,6 @@ _testmain.go
 
 # vendored libraries
 vendor
+
+# coverage
+coverage.out
