@@ -7,7 +7,7 @@ go:
 notifications:
     email: false
 
-before_script:
+before_install:
     - curl -o /tmp/glide.tar.gz --location https://github.com/Masterminds/glide/releases/download/0.10.2/glide-0.10.2-linux-amd64.tar.gz
     - tar -xzvf /tmp/glide.tar.gz
     - export PATH=$PATH:$PWD/linux-amd64/
