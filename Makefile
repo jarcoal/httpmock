@@ -16,6 +16,6 @@ test:
 clean:
 	rm -f $(COVERAGE)
 
-.PHONY: cover
-cover: test
+.PHONY: coverage
+coverage: test
 	$(GOCOVER) -func=$(COVERAGE)
