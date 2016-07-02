@@ -1,5 +1,5 @@
-hash: ce28c1e4b3c6ba46e287a9a61c9f63ad1493cc72f2cc8afb1f227ea383bfd8ee
-updated: 2016-07-01T01:02:00.734965001+01:00
+hash: 5c99a192912f6eadfbe5355a11011fee7d6dc128f63ff7d972bcdc49a50864bb
+updated: 2016-07-02T01:54:23.6598234+01:00
 imports:
 - name: github.com/goware/urlx
   version: 86bdc24560383254e8b977da31a823eddf904409
