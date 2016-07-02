@@ -6,7 +6,7 @@ Simple Example:
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
 
-		httpmock.RegisterResponder(
+		httpmock.RegisterStubRequest(
 			httpmock.NewStubRequest(
 				"GET",
 				"https://api.mybiz.com/articles.json",
