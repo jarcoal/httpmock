@@ -1,0 +1,4 @@
+package: github.com/thingful/httpmock
+import:
+- package: github.com/goware/urlx
+  version: 86bdc24560383254e8b977da31a823eddf904409

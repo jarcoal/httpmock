@@ -46,7 +46,7 @@ func TestNewBytesResponse(t *testing.T) {
 	}
 }
 
-func TestNewJsonResponse(t *testing.T) {
+func TestNewJSONResponse(t *testing.T) {
 	type schema struct {
 		Hello string `json:"hello"`
 	}
@@ -54,7 +54,7 @@ func TestNewJsonResponse(t *testing.T) {
 	body := &schema{"world"}
 	status := 200
 
-	response, err := NewJsonResponse(status, body)
+	response, err := NewJSONResponse(status, body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestNewJsonResponse(t *testing.T) {
 	}
 }
 
-func TestNewXmlResponse(t *testing.T) {
+func TestNewXMLResponse(t *testing.T) {
 	type schema struct {
 		Hello string `xml:"hello"`
 	}
@@ -85,7 +85,7 @@ func TestNewXmlResponse(t *testing.T) {
 	body := &schema{"world"}
 	status := 200
 
-	response, err := NewXmlResponse(status, body)
+	response, err := NewXMLResponse(status, body)
 	if err != nil {
 		t.Fatal(err)
 	}
