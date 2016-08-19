@@ -157,6 +157,31 @@ func TestMockTransportAdvanced(t *testing.T) {
 	}
 }
 
+func TestAllStubsCalled(t *testing.T) {
+	Activate()
+	defer DeactivateAndReset()
+
+	// register two stubs
+	RegisterStubRequest(NewStubRequest("GET", "http://github.com", NewStringResponder(200, "ok")))
+	RegisterStubRequest(NewStubRequest("GET", "http://example.com", NewStringResponder(200, "ok")))
+
+	// make a single request
+	resp, err := http.Get("http://github.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	err = AllStubsCalled()
+	if err == nil {
+		t.Errorf("Expected error when not all stubs called")
+	}
+
+	if !strings.Contains(err.Error(), "http://example.com") {
+		t.Errorf("Expected error message to contain uncalled stub, got: '%s'", err.Error())
+	}
+}
+
 func TestMockTransportReset(t *testing.T) {
 	DeactivateAndReset()
 

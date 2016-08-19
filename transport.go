@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // Responder types are callbacks that receive and http request and return a
@@ -14,21 +15,33 @@ type Responder func(*http.Request) (*http.Response, error)
 // HTTP method and URL.
 var ErrNoResponderFound = errors.New("no responder found")
 
-// StubNotCalled is a type implementing the error interface we return when a
-// stub has not been called
-type StubNotCalled struct {
-	Stub *StubRequest
+// ErrStubsNotCalled is a type implementing the error interface we return when
+// not all registered stubs were called
+type ErrStubsNotCalled struct {
+	uncalledStubs []*StubRequest
 }
 
-// Error ensures our StubNotCalled type implements the error interface
-func (e *StubNotCalled) Error() string {
-	return fmt.Sprintf("Stub not called: %#v", e.Stub)
+// Error ensures our ErrStubsNotCalled type implements the error interface
+func (e *ErrStubsNotCalled) Error() string {
+	// TODO: is there a better way of giving a rich error message than this?
+
+	msg := `
+Uncalled stubs
+----------------------------
+%s
+`
+	uncalled := []string{}
+	for _, s := range e.uncalledStubs {
+		uncalled = append(uncalled, s.String())
+	}
+
+	return fmt.Sprintf(msg, strings.Join(uncalled, "\n"))
 }
 
-// NewStubNotCalled returns a new StubNotCalled error for the given stub
-func NewStubNotCalled(stub *StubRequest) *StubNotCalled {
-	return &StubNotCalled{
-		Stub: stub,
+// NewErrStubsNotCalled returns a new StubsNotCalled error
+func NewErrStubsNotCalled(uncalledStubs []*StubRequest) *ErrStubsNotCalled {
+	return &ErrStubsNotCalled{
+		uncalledStubs: uncalledStubs,
 	}
 }
 
@@ -41,8 +54,8 @@ func ConnectionFailure(*http.Request) (*http.Response, error) {
 // NewMockTransport creates a new *MockTransport with no stubbed requests.
 func NewMockTransport() *MockTransport {
 	return &MockTransport{
-		make([]*StubRequest, 0),
-		nil,
+		stubs:       make([]*StubRequest, 0),
+		noResponder: nil,
 	}
 }
 
@@ -58,7 +71,6 @@ type MockTransport struct {
 // implement the http.RoundTripper interface.  You will not interact with this directly, instead
 // the *http.Client you are using will call it for you.
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-
 	// try and get a responder that matches the given request
 	stub, err := m.stubForRequest(req)
 	// we didn't find a responder so fire the 'no responder' responder
@@ -117,13 +129,19 @@ func (m *MockTransport) Reset() {
 // AllStubsCalled returns nil if all of the currently registered stubs have
 // been called; if some haven't been called, then it returns an error.
 func (m *MockTransport) AllStubsCalled() error {
+	var uncalledStubs []*StubRequest
+
 	for _, stub := range m.stubs {
 		if stub.Called == false {
-			return NewStubNotCalled(stub)
+			uncalledStubs = append(uncalledStubs, stub)
 		}
 	}
 
-	return nil
+	if len(uncalledStubs) == 0 {
+		return nil
+	}
+
+	return NewErrStubsNotCalled(uncalledStubs)
 }
 
 // DefaultTransport is the default mock transport used by Activate, Deactivate,
