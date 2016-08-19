@@ -204,3 +204,43 @@ func TestRequestWithBody(t *testing.T) {
 		}
 	}
 }
+
+func TestStubbedRequestStringer(t *testing.T) {
+	testcases := []struct {
+		method   string
+		url      string
+		header   *http.Header
+		expected string
+	}{
+		{
+			method:   "GET",
+			url:      "http://example.com",
+			expected: "GET http://example.com",
+		},
+		{
+			method:   "POST",
+			url:      "http://example.com/resource",
+			expected: "POST http://example.com/resource",
+		},
+		{
+			method: "GET",
+			url:    "http://example.com",
+			header: &http.Header{
+				"X-ApiKey": []string{"api-key"},
+			},
+			expected: "GET http://example.com with headers &map[X-ApiKey:[api-key]]",
+		},
+	}
+
+	for _, testcase := range testcases {
+		stub := NewStubRequest(
+			testcase.method,
+			testcase.url,
+			NewStringResponder(200, "ok"),
+		).WithHeader(testcase.header)
+
+		if stub.String() != testcase.expected {
+			t.Errorf("Unexpected response, expected '%s', got '%s'", testcase.expected, stub.String())
+		}
+	}
+}

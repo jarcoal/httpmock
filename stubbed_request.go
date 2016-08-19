@@ -2,6 +2,7 @@ package httpmock
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -120,4 +121,14 @@ func (r *StubRequest) Matches(req *http.Request) error {
 	}
 
 	return nil
+}
+
+func (r *StubRequest) String() string {
+	str := fmt.Sprintf("%s %s", r.Method, r.URL)
+
+	if r.Header != nil {
+		str = str + fmt.Sprintf(" with headers %v", r.Header)
+	}
+
+	return str
 }
