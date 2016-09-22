@@ -21,10 +21,11 @@ func ResponderFromResponse(resp *http.Response) Responder {
 // an http status code.
 func NewStringResponse(status int, body string) *http.Response {
 	return &http.Response{
-		Status:     strconv.Itoa(status),
-		StatusCode: status,
-		Body:       NewRespBodyFromString(body),
-		Header:     http.Header{},
+		Status:        strconv.Itoa(status),
+		StatusCode:    status,
+		Body:          NewRespBodyFromString(body),
+		Header:        http.Header{},
+		ContentLength: -1,
 	}
 }
 
@@ -37,10 +38,11 @@ func NewStringResponder(status int, body string) Responder {
 // an http status code.
 func NewBytesResponse(status int, body []byte) *http.Response {
 	return &http.Response{
-		Status:     strconv.Itoa(status),
-		StatusCode: status,
-		Body:       NewRespBodyFromBytes(body),
-		Header:     http.Header{},
+		Status:        strconv.Itoa(status),
+		StatusCode:    status,
+		Body:          NewRespBodyFromBytes(body),
+		Header:        http.Header{},
+		ContentLength: -1,
 	}
 }
 
