@@ -117,6 +117,38 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 	}
 }
 
+func TestMockTransportWithQuerystring(t *testing.T) {
+	Activate()
+	defer DeactivateAndReset()
+
+	// register a responder with query parameters
+	RegisterResponder("GET", testUrl+"?first=val&second=val", NewStringResponder(200, "hello world"))
+
+	// should error if no parameters passed
+	if _, err := http.Get(testUrl); err == nil {
+		t.Fatal("expected to receive a connection error due to lack of responders")
+	}
+
+	// should error if if only one parameter passed
+	if _, err := http.Get(testUrl + "?first=val"); err == nil {
+		t.Fatal("expected to receive a connection error due to lack of responders")
+	}
+	if _, err := http.Get(testUrl + "?second=val"); err == nil {
+		t.Fatal("expected to receive a connection error due to lack of responders")
+	}
+
+	// should not error if both parameters are sent
+	_, err := http.Get(testUrl + "?first=val&second=val")
+	if err != nil {
+		t.Fatal("expected request to succeed")
+	}
+
+	_, err = http.Get(testUrl + "?second=val&first=val")
+	if err != nil {
+		t.Fatal("expected request to succeed")
+	}
+}
+
 type dummyTripper struct{}
 
 func (d *dummyTripper) RoundTrip(*http.Request) (*http.Response, error) {
