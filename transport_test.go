@@ -1,15 +1,33 @@
 package httpmock
 
 import (
+	"errors"
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 )
 
 var testUrl = "http://www.example.com/"
+
+func assertBody(t *testing.T, resp *http.Response, expected string) {
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := string(data)
+
+	if got != expected {
+		t.Errorf("Expected body: %#v, got %#v", expected, got)
+	}
+}
 
 func TestMockTransport(t *testing.T) {
 	Activate()
@@ -182,5 +200,98 @@ func TestMockTransportNonDefault(t *testing.T) {
 
 	if string(data) != body {
 		t.FailNow()
+	}
+}
+
+func TestMockTransportRespectsCancel(t *testing.T) {
+	Activate()
+	defer DeactivateAndReset()
+
+	cases := []struct {
+		withCancel   bool
+		cancelNow    bool
+		withPanic    bool
+		expectedBody string
+		expectedErr  error
+	}{
+		// No cancel specified at all. Falls back to normal behavior
+		{false, false, false, "hello world", nil},
+
+		// Cancel returns error
+		{true, true, false, "", errors.New("request canceled")},
+
+		// Request can be cancelled but it is not cancelled.
+		{true, false, false, "hello world", nil},
+
+		// Panic in cancelled request is handled
+		{true, false, true, "", errors.New(`panic in responder: got "oh no"`)},
+	}
+
+	for _, c := range cases {
+		Reset()
+		if c.withPanic {
+			RegisterResponder("GET", testUrl, func(r *http.Request) (*http.Response, error) {
+				time.Sleep(time.Millisecond)
+				panic("oh no")
+			})
+		} else {
+			RegisterResponder("GET", testUrl, func(r *http.Request) (*http.Response, error) {
+				time.Sleep(time.Millisecond)
+				return NewStringResponse(http.StatusOK, "hello world"), nil
+			})
+		}
+
+		req, err := http.NewRequest("GET", testUrl, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.withCancel {
+			cancel := make(chan struct{}, 1)
+			req.Cancel = cancel
+			if c.cancelNow {
+				cancel <- struct{}{}
+			}
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+
+		// If we expect and error but none was returned, it's fatal for this test...
+		if err == nil && c.expectedErr != nil {
+			t.Fatal("Error should not be nil")
+		}
+
+		if err != nil {
+			got := err.(*url.Error)
+			if !reflect.DeepEqual(got.Err, c.expectedErr) {
+				t.Errorf("Expected: %#v, got: %#v", c.expectedErr, got.Err)
+			}
+		}
+
+		if c.expectedBody != "" {
+			assertBody(t, resp, c.expectedBody)
+		}
+	}
+}
+
+func TestMockTransportRespectsTimeout(t *testing.T) {
+	timeout := time.Millisecond
+	client := &http.Client{
+		Timeout: timeout,
+	}
+
+	ActivateNonDefault(client)
+	defer DeactivateAndReset()
+
+	RegisterResponder(
+		"GET", testUrl,
+		func(r *http.Request) (*http.Response, error) {
+			time.Sleep(2 * timeout)
+			return NewStringResponse(http.StatusOK, ""), nil
+		},
+	)
+
+	_, err := client.Get(testUrl)
+	if err == nil {
+		t.Fail()
 	}
 }
