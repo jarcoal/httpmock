@@ -55,3 +55,44 @@ func TestFetchArticles(t *testing.T) {
 	// do stuff that adds and checks articles
 }
 ```
+
+### [Ginkgo](https://onsi.github.io/ginkgo/) Example:
+```go
+// article_suite_test.go
+
+import (
+	// ...
+	"github.com/jarcoal/httpmock"
+)
+// ...
+var _ = BeforeSuite(func() {
+	// block all HTTP requests
+	httpmock.Activate()
+})
+
+var _ = BeforeEach(func() {
+	// remove any mocks
+	httpmock.Reset()
+})
+
+var _ = AfterSuite(func() {
+	httpmock.DeactivateAndReset()
+})
+
+
+// article_test.go
+
+import (
+	// ...
+	"github.com/jarcoal/httpmock"
+)
+
+var _ = Describe("Articles", func() {
+	It("returns a list of articles", func() {
+		httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
+			httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
+
+		// do stuff that makes a request to articles.json
+	})
+})
+```
