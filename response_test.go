@@ -3,8 +3,10 @@ package httpmock
 import (
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"testing"
 )
 
@@ -16,6 +18,9 @@ func TestResponderFromResponse(t *testing.T) {
 		t.Fatal("Error creating request")
 	}
 	response1, err := responder(req)
+	if err != nil {
+		t.Error("Error should be nil")
+	}
 
 	testUrlWithQuery := testUrl + "?a=1"
 	req, err = http.NewRequest(http.MethodGet, testUrlWithQuery, nil)
@@ -23,6 +28,9 @@ func TestResponderFromResponse(t *testing.T) {
 		t.Fatal("Error creating request")
 	}
 	response2, err := responder(req)
+	if err != nil {
+		t.Error("Error should be nil")
+	}
 
 	// Body should be the same for both responses
 	assertBody(t, response1, "hello world")
@@ -138,6 +146,22 @@ func TestNewXmlResponse(t *testing.T) {
 
 	if checkBody.Hello != body.Hello {
 		t.FailNow()
+	}
+}
+
+func TestNewErrorResponder(t *testing.T) {
+	responder := NewErrorResponder(errors.New("oh no"))
+	req, err := http.NewRequest(http.MethodGet, testUrl, nil)
+	if err != nil {
+		t.Fatal("Error creating request")
+	}
+	response, err := responder(req)
+	if response != nil {
+		t.Error("Response should be nil")
+	}
+	expected := errors.New("oh no")
+	if !reflect.DeepEqual(err, expected) {
+		t.Errorf("Expected error %#v, got: %#v", expected, err)
 	}
 }
 
