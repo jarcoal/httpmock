@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 // Responders are callbacks that receive and http request and return a mocked response.
@@ -30,6 +31,8 @@ type MockTransport struct {
 	responders  map[string]Responder
 	noResponder Responder
 }
+
+var responderLock sync.RWMutex
 
 // RoundTrip receives HTTP requests and routes them to the appropriate responder.  It is required to
 // implement the http.RoundTripper interface.  You will not interact with this directly, instead
@@ -63,6 +66,9 @@ func (m *MockTransport) CancelRequest(req *http.Request) {}
 
 // responderForKey returns a responder for a given key
 func (m *MockTransport) responderForKey(key string) Responder {
+	responderLock.Lock()
+	defer responderLock.Unlock()
+
 	for k, r := range m.responders {
 		if k != key {
 			continue
@@ -75,6 +81,9 @@ func (m *MockTransport) responderForKey(key string) Responder {
 // RegisterResponder adds a new responder, associated with a given HTTP method and URL.  When a
 // request comes in that matches, the responder will be called and the response returned to the client.
 func (m *MockTransport) RegisterResponder(method, url string, responder Responder) {
+	responderLock.Lock()
+	defer responderLock.Unlock()
+
 	m.responders[method+" "+url] = responder
 }
 
@@ -86,6 +95,9 @@ func (m *MockTransport) RegisterNoResponder(responder Responder) {
 
 // Reset removes all registered responders (including the no responder) from the MockTransport
 func (m *MockTransport) Reset() {
+	responderLock.Lock()
+	defer responderLock.Unlock()
+
 	m.responders = make(map[string]Responder)
 	m.noResponder = nil
 }
