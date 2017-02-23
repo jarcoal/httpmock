@@ -1,6 +1,8 @@
 package httpmock
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"net"
@@ -294,4 +296,57 @@ func TestMockTransportRespectsTimeout(t *testing.T) {
 	if err == nil {
 		t.Fail()
 	}
+}
+
+func TestMockTransportCallCount(t *testing.T) {
+	Reset()
+	Activate()
+	defer Deactivate()
+
+	url := "https://github.com/"
+	url2 := "https://gitlab.com/"
+
+	RegisterResponder("GET", url, NewStringResponder(200, "body"))
+	RegisterResponder("POST", url2, NewStringResponder(200, "body"))
+
+	_, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	buff := new(bytes.Buffer)
+	json.NewEncoder(buff).Encode("{}")
+	_, err1 := http.Post(url2, "application/json", buff)
+	if err1 != nil {
+		t.Fatal(err1)
+	}
+
+	_, err2 := http.Get(url)
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+
+	totalCallCount := GetTotalCallCount()
+	if totalCallCount != 3 {
+		t.Fatalf("did not track the total count of calls correctly. expected it to be 3, but it was %v", totalCallCount)
+	}
+
+	info := GetCallCountInfo()
+	expectedInfo := map[string]int{}
+	urlCallkey := "GET " + url
+	url2Callkey := "POST " + url2
+	expectedInfo[urlCallkey] = 2
+	expectedInfo[url2Callkey] = 1
+
+	if !reflect.DeepEqual(info, expectedInfo) {
+		t.Fatalf("did not correctly track the call count info. expected it to be \n %+v \n but it was \n %+v \n", expectedInfo, info)
+	}
+
+	Reset()
+
+	afterResetTotalCallCount := GetTotalCallCount()
+	if totalCallCount != 3 {
+		t.Fatalf("did not reset the total count of calls correctly. expected it to be 0 after reset, but it was %v", afterResetTotalCallCount)
+	}
+
 }

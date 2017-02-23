@@ -21,15 +21,17 @@ func ConnectionFailure(*http.Request) (*http.Response, error) {
 
 // NewMockTransport creates a new *MockTransport with no responders.
 func NewMockTransport() *MockTransport {
-	return &MockTransport{make(map[string]Responder), nil}
+	return &MockTransport{make(map[string]Responder), nil, make(map[string]int), 0}
 }
 
 // MockTransport implements http.RoundTripper, which fulfills single http requests issued by
 // an http.Client.  This implementation doesn't actually make the call, instead deferring to
 // the registered list of responders.
 type MockTransport struct {
-	responders  map[string]Responder
-	noResponder Responder
+	responders     map[string]Responder
+	noResponder    Responder
+	callCountInfo  map[string]int
+	totalCallCount int
 }
 
 // RoundTrip receives HTTP requests and routes them to the appropriate responder.  It is required to
@@ -39,16 +41,20 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	url := req.URL.String()
 
 	// try and get a responder that matches the method and URL
-	responder := m.responderForKey(req.Method + " " + url)
+	key := req.Method + " " + url
+	responder := m.responderForKey(key)
 
 	// if we weren't able to find a responder and the URL contains a querystring
 	// then we strip off the querystring and try again.
 	if responder == nil && strings.Contains(url, "?") {
-		responder = m.responderForKey(req.Method + " " + strings.Split(url, "?")[0])
+		key = req.Method + " " + strings.Split(url, "?")[0]
+		responder = m.responderForKey(key)
 	}
 
 	// if we found a responder, call it
 	if responder != nil {
+		m.callCountInfo[key]++
+		m.totalCallCount++
 		return runCancelable(responder, req)
 	}
 
@@ -56,6 +62,8 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if m.noResponder == nil {
 		return ConnectionFailure(req)
 	}
+	m.callCountInfo["NO_RESPONDER"]++
+	m.totalCallCount++
 	return runCancelable(m.noResponder, req)
 }
 
@@ -129,7 +137,10 @@ func (m *MockTransport) responderForKey(key string) Responder {
 // RegisterResponder adds a new responder, associated with a given HTTP method and URL.  When a
 // request comes in that matches, the responder will be called and the response returned to the client.
 func (m *MockTransport) RegisterResponder(method, url string, responder Responder) {
-	m.responders[method+" "+url] = responder
+	key := method + " " + url
+
+	m.responders[key] = responder
+	m.callCountInfo[key] = 0
 }
 
 // RegisterNoResponder is used to register a responder that will be called if no other responder is
@@ -142,6 +153,18 @@ func (m *MockTransport) RegisterNoResponder(responder Responder) {
 func (m *MockTransport) Reset() {
 	m.responders = make(map[string]Responder)
 	m.noResponder = nil
+	m.callCountInfo = make(map[string]int)
+	m.totalCallCount = 0
+}
+
+// GetCallCountInfo returns callCountInfo
+func (m *MockTransport) GetCallCountInfo() map[string]int {
+	return m.callCountInfo
+}
+
+// GetTotalCallCount returns the totalCallCount
+func (m *MockTransport) GetTotalCallCount() int {
+	return m.totalCallCount
 }
 
 // DefaultTransport is the default mock transport used by Activate, Deactivate, Reset,
@@ -199,6 +222,19 @@ func ActivateNonDefault(client *http.Client) {
 	oldTransport = client.Transport
 	oldClient = client
 	client.Transport = DefaultTransport
+}
+
+// GetCallCountInfo gets the info on all the calls httpmock has taken since it was activated or
+// reset. The info is returned as a map of the calling keys with the number of calls made to them
+// as their value. The key is the method, a space, and the url all concatenated together.
+func GetCallCountInfo() map[string]int {
+	return DefaultTransport.GetCallCountInfo()
+}
+
+// GetTotalCallCount gets the total number of calls httpmock has taken since it was activated or
+// reset.
+func GetTotalCallCount() int {
+	return DefaultTransport.GetTotalCallCount()
 }
 
 // Deactivate shuts down the mock environment.  Any HTTP calls made after this will use a live
