@@ -345,7 +345,7 @@ func TestMockTransportCallCount(t *testing.T) {
 	Reset()
 
 	afterResetTotalCallCount := GetTotalCallCount()
-	if totalCallCount != 3 {
+	if afterResetTotalCallCount != 0 {
 		t.Fatalf("did not reset the total count of calls correctly. expected it to be 0 after reset, but it was %v", afterResetTotalCallCount)
 	}
 
