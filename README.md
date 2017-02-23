@@ -21,6 +21,13 @@ func TestFetchArticles(t *testing.T) {
 	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
 		httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
 
+  // get count info
+  httpmock.GetTotalCallCount()
+
+  // get the amount of calls for the registered responder
+  info := httpmock.GetCallCountInfo()
+  info["GET https://api.mybiz.com/articles.json"] // number of GET calls made to https://api.mybiz.com/articles.json
+
 	// do stuff that makes a request to articles.json
 }
 ```
