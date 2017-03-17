@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 // Responders are callbacks that receive and http request and return a mocked response.
@@ -21,13 +22,17 @@ func ConnectionFailure(*http.Request) (*http.Response, error) {
 
 // NewMockTransport creates a new *MockTransport with no responders.
 func NewMockTransport() *MockTransport {
-	return &MockTransport{make(map[string]Responder), nil, make(map[string]int), 0}
+	return &MockTransport{
+		responders:    make(map[string]Responder),
+		callCountInfo: make(map[string]int),
+	}
 }
 
 // MockTransport implements http.RoundTripper, which fulfills single http requests issued by
 // an http.Client.  This implementation doesn't actually make the call, instead deferring to
 // the registered list of responders.
 type MockTransport struct {
+	mu             sync.RWMutex
 	responders     map[string]Responder
 	noResponder    Responder
 	callCountInfo  map[string]int
@@ -50,7 +55,8 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		key = req.Method + " " + strings.Split(url, "?")[0]
 		responder = m.responderForKey(key)
 	}
-
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	// if we found a responder, call it
 	if responder != nil {
 		m.callCountInfo[key]++
@@ -125,6 +131,8 @@ func (m *MockTransport) CancelRequest(req *http.Request) {}
 
 // responderForKey returns a responder for a given key
 func (m *MockTransport) responderForKey(key string) Responder {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	for k, r := range m.responders {
 		if k != key {
 			continue
@@ -139,32 +147,47 @@ func (m *MockTransport) responderForKey(key string) Responder {
 func (m *MockTransport) RegisterResponder(method, url string, responder Responder) {
 	key := method + " " + url
 
+	m.mu.Lock()
 	m.responders[key] = responder
 	m.callCountInfo[key] = 0
+	m.mu.Unlock()
 }
 
 // RegisterNoResponder is used to register a responder that will be called if no other responder is
 // found.  The default is ConnectionFailure.
 func (m *MockTransport) RegisterNoResponder(responder Responder) {
+	m.mu.Lock()
 	m.noResponder = responder
+	m.mu.Unlock()
 }
 
 // Reset removes all registered responders (including the no responder) from the MockTransport
 func (m *MockTransport) Reset() {
+	m.mu.Lock()
 	m.responders = make(map[string]Responder)
 	m.noResponder = nil
 	m.callCountInfo = make(map[string]int)
 	m.totalCallCount = 0
+	m.mu.Unlock()
 }
 
 // GetCallCountInfo returns callCountInfo
 func (m *MockTransport) GetCallCountInfo() map[string]int {
-	return m.callCountInfo
+	res := map[string]int{}
+	m.mu.RLock()
+	for k, v := range m.callCountInfo {
+		res[k] = v
+	}
+	m.mu.RUnlock()
+	return res
 }
 
 // GetTotalCallCount returns the totalCallCount
 func (m *MockTransport) GetTotalCallCount() int {
-	return m.totalCallCount
+	m.mu.RLock()
+	count := m.totalCallCount
+	m.mu.RUnlock()
+	return count
 }
 
 // DefaultTransport is the default mock transport used by Activate, Deactivate, Reset,
