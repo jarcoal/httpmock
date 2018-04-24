@@ -119,3 +119,52 @@ var _ = Describe("Articles", func() {
 	})
 })
 ```
+
+### [Ginkgo](https://onsi.github.io/ginkgo/) + [Resty](https://github.com/go-resty/resty) Example:
+```go
+// article_suite_test.go
+
+import (
+	// ...
+	"github.com/jarcoal/httpmock"
+	"github.com/go-resty/resty"
+)
+// ...
+var _ = BeforeSuite(func() {
+	// block all HTTP requests
+	httpmock.ActivateNonDefault(resty.DefaultClient.GetClient())
+})
+
+var _ = BeforeEach(func() {
+	// remove any mocks
+	httpmock.Reset()
+})
+
+var _ = AfterSuite(func() {
+	httpmock.DeactivateAndReset()
+})
+
+
+// article_test.go
+
+import (
+	// ...
+	"github.com/jarcoal/httpmock"
+	"github.com/go-resty/resty"
+)
+
+var _ = Describe("Articles", func() {
+	It("returns a list of articles", func() {
+		fixture := `{"status":{"message": "Your message", "code": 200}}`
+		responder, err := httpmock.NewJsonResponder(200, fixture)
+		fakeUrl := "https://api.mybiz.com/articles.json"
+		httpmock.RegisterResponder("GET", fakeUrl, responder)
+
+		// fetch the article into struct
+		articleObject := &models.Article{}
+		_, err := resty.R().SetResult(articleObject).Get(fakeUrl)
+		
+		// do stuff with the article object ...
+	})
+})
+```
