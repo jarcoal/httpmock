@@ -17,8 +17,7 @@ branch to prevent breaking existing projects using this library.
 
     go get github.com/jarcoal/httpmock
 
-**V1**. (Active, recommended) Currently supports Go 1.7 but also works with
-1.6 for now. Uses gopkg to read from `v1` branch:
+**V1**. (Active, recommended) Currently supports Go 1.7 - 1.10. Uses gopkg to read from `v1` branch:
 
     go get gopkg.in/jarcoal/httpmock.v1
 
