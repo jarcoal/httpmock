@@ -133,13 +133,7 @@ func (m *MockTransport) CancelRequest(req *http.Request) {}
 func (m *MockTransport) responderForKey(key string) Responder {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	for k, r := range m.responders {
-		if k != key {
-			continue
-		}
-		return r
-	}
-	return nil
+	return m.responders[key]
 }
 
 // RegisterResponder adds a new responder, associated with a given HTTP method and URL.  When a
