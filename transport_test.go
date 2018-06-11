@@ -137,6 +137,29 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 	}
 }
 
+func TestMockTransportPathOnlyFallback(t *testing.T) {
+	Activate()
+	defer DeactivateAndReset()
+
+	// register the URL path only responder
+	RegisterResponder("GET", "/hello/world", NewStringResponder(200, "hello world"))
+
+	// make a request for the testUrl with a path
+	resp, err := http.Get(testUrl + "hello/world")
+	if err != nil {
+		t.Fatal("expected request to succeed")
+	}
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(data) != "hello world" {
+		t.Fatal("expected body to be 'hello world'")
+	}
+}
+
 type dummyTripper struct{}
 
 func (d *dummyTripper) RoundTrip(*http.Request) (*http.Response, error) {

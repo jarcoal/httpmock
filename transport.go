@@ -55,6 +55,14 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		key = req.Method + " " + strings.Split(url, "?")[0]
 		responder = m.responderForKey(key)
 	}
+
+	// if we weren't able to find a responder for the full URL, try with
+	// the path only
+	if responder == nil {
+		key = req.Method + " " + req.URL.Path
+		responder = m.responderForKey(key)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// if we found a responder, call it
