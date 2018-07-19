@@ -45,8 +45,14 @@ type MockTransport struct {
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	url := req.URL.String()
 
+	method := req.Method
+	if method == "" {
+		// http.Request.Method is documented to default to GET:
+		method = http.MethodGet
+	}
+
 	// try and get a responder that matches the method and URL
-	key := req.Method + " " + url
+	key := method + " " + url
 	responder := m.responderForKey(key)
 
 	// if we weren't able to find a responder
@@ -64,14 +70,14 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// if the URL contains a querystring then we strip off the
 		// querystring and try again.
 		if hasQueryString {
-			key = req.Method + " " + surl
+			key = method + " " + surl
 			responder = m.responderForKey(key)
 		}
 
 		// if we weren't able to find a responder for the full URL, try with
 		// the path part only
 		if responder == nil {
-			keyPathAlone := req.Method + " " + req.URL.Path
+			keyPathAlone := method + " " + req.URL.Path
 			key = keyPathAlone
 
 			// First with querystring

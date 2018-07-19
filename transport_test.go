@@ -63,6 +63,43 @@ func TestMockTransport(t *testing.T) {
 	}
 }
 
+// We should be able to find GET handlers when using an http.Request with a
+// default (zero-value) .Method.
+func TestMockTransportDefaultMethod(t *testing.T) {
+	Activate()
+	defer Deactivate()
+
+	urlString := "https://github.com/"
+	url, err := url.Parse(urlString)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := "hello world"
+
+	RegisterResponder("GET", urlString, NewStringResponder(200, body))
+
+	req := &http.Request {
+		URL: url,
+		// Note: Method unspecified (zero-value)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(data) != body {
+		t.FailNow()
+	}
+}
+
 func TestMockTransportReset(t *testing.T) {
 	DeactivateAndReset()
 
