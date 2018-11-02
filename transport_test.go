@@ -78,7 +78,7 @@ func TestMockTransportDefaultMethod(t *testing.T) {
 
 	RegisterResponder("GET", urlString, NewStringResponder(200, body))
 
-	req := &http.Request {
+	req := &http.Request{
 		URL: url,
 		// Note: Method unspecified (zero-value)
 	}
@@ -437,4 +437,44 @@ func TestMockTransportCallCount(t *testing.T) {
 		t.Fatalf("did not reset the total count of calls correctly. expected it to be 0 after reset, but it was %v", afterResetTotalCallCount)
 	}
 
+}
+
+func TestRegisterResponderWithQuery(t *testing.T) {
+	// create a custom http client w/ custom Roundtripper
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			Dial: (&net.Dialer{
+				Timeout:   60 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).Dial,
+			TLSHandshakeTimeout: 60 * time.Second,
+		},
+	}
+	// activate mocks for the client
+	ActivateNonDefault(client)
+	defer DeactivateAndReset()
+	body := "hello world!"
+	testUrlPath := "http://acme.test/api"
+	expectedQuery := map[string]string{"a": "1", "b": "2"}
+	RegisterResponderWithQuery("GET", testUrlPath, expectedQuery, NewStringResponder(200, body))
+	testFullUrls := []string{testUrlPath + "?a=1&b=2", testUrlPath + "?b=2&a=1"}
+	for _, url := range testFullUrls {
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		data, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != body {
+			t.FailNow()
+		}
+	}
 }
