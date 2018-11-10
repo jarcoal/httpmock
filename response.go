@@ -83,6 +83,24 @@ func NewJsonResponder(status int, body interface{}) (Responder, error) {
 	return ResponderFromResponse(resp), nil
 }
 
+// NewJsonResponderOrPanic is like NewJsonResponder but panics in case of error.
+//
+// It simplifies the call of RegisterResponder, avoiding the use of a
+// temporary variable and an error check, and so can be used as
+// NewStringResponder or NewBytesResponder in such context:
+//   RegisterResponder(
+//     "GET",
+//     "/test/path",
+//     NewJSONResponderOrPanic(200, &MyBody),
+//   )
+func NewJsonResponderOrPanic(status int, body interface{}) Responder {
+	responder, err := NewJsonResponder(status, body)
+	if err != nil {
+		panic(err)
+	}
+	return responder
+}
+
 // NewXmlResponse creates an *http.Response with a body that is an xml encoded representation
 // of the given interface{}.  Also accepts an http status code.
 func NewXmlResponse(status int, body interface{}) (*http.Response, error) {
@@ -103,6 +121,24 @@ func NewXmlResponder(status int, body interface{}) (Responder, error) {
 		return nil, err
 	}
 	return ResponderFromResponse(resp), nil
+}
+
+// NewXmlResponderOrPanic is like NewXmlResponder but panics in case of error.
+//
+// It simplifies the call of RegisterResponder, avoiding the use of a
+// temporary variable and an error check, and so can be used as
+// NewStringResponder or NewBytesResponder in such context:
+//   RegisterResponder(
+//     "GET",
+//     "/test/path",
+//     NewXmlResponderOrPanic(200, &MyBody),
+//   )
+func NewXmlResponderOrPanic(status int, body interface{}) Responder {
+	responder, err := NewXmlResponder(status, body)
+	if err != nil {
+		panic(err)
+	}
+	return responder
 }
 
 // NewRespBodyFromString creates an io.ReadCloser from a string that is suitable for use as an
