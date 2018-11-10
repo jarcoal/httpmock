@@ -376,7 +376,7 @@ func DeactivateAndReset() {
 // 			httpmock.DeactivateAndReset()
 //
 // 			httpmock.RegisterResponder("GET", "http://example.com/",
-// 				httpmock.NewStringResponder("hello world", 200))
+// 				httpmock.NewStringResponder(200, "hello world"))
 //
 // 			httpmock.RegisterResponder("GET", "/path/only",
 // 				httpmock.NewStringResponder("any host hello world", 200))
