@@ -190,7 +190,7 @@ func DeactivateAndReset() {
 // 			httpmock.DeactivateAndReset()
 //
 // 			httpmock.RegisterResponder("GET", "http://example.com/",
-// 				httpmock.NewStringResponder("hello world", 200))
+// 				httpmock.NewStringResponder(200, "hello world"))
 //
 //			// requests to http://example.com/ will now return 'hello world'
 // 		}
