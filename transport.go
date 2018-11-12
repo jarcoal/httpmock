@@ -44,9 +44,9 @@ type MockTransport struct {
 // implement the http.RoundTripper interface.  You will not interact with this directly, instead
 // the *http.Client you are using will call it for you.
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	queryAsMap := make(map[string]string)
+	queryAsMap := make(map[string][]string)
 	for k, v := range map[string][]string(req.URL.Query()) {
-		queryAsMap[k] = v[0]
+		queryAsMap[k] = v
 	}
 
 	query := mapToSortedQuery(queryAsMap)
@@ -199,14 +199,18 @@ func (m *MockTransport) RegisterResponder(method, url string, responder Responde
 // RegisterResponderWithQuery is same as RegisterResponder, but it doesn't depend on query items order
 func (m *MockTransport) RegisterResponderWithQuery(method, path string, query map[string]string, responder Responder) {
 	url := path
-	queryString := mapToSortedQuery(query)
+	mapQuery := make(map[string][]string, len(query))
+	for key, e := range query {
+		mapQuery[key] = []string{e}
+	}
+	queryString := mapToSortedQuery(mapQuery)
 	if queryString != nil {
 		url = path + "?" + *queryString
 	}
 	m.RegisterResponder(method, url, responder)
 }
 
-func mapToSortedQuery(m map[string]string) *string {
+func mapToSortedQuery(m map[string][]string) *string {
 	if m == nil {
 		return nil
 	}
@@ -220,7 +224,9 @@ func mapToSortedQuery(m map[string]string) *string {
 	sort.Strings(keys)
 	var queryArray []string
 	for _, k := range keys {
-		queryArray = append(queryArray, fmt.Sprintf("%s=%s", k, m[k]))
+		for _, v := range m[k] {
+			queryArray = append(queryArray, fmt.Sprintf("%s=%s", k, v))
+		}
 	}
 	query := strings.Join(queryArray, "&")
 	return &query
