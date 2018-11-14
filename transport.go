@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 )
@@ -181,8 +182,14 @@ func (m *MockTransport) responderForKey(key string) Responder {
 
 // RegisterResponder adds a new responder, associated with a given HTTP method and URL (or path).  When a
 // request comes in that matches, the responder will be called and the response returned to the client.
-func (m *MockTransport) RegisterResponder(method, url string, responder Responder) {
-	key := method + " " + url
+func (m *MockTransport) RegisterResponder(method, urlString string, responder Responder) {
+	u, err := url.Parse(urlString)
+	if err == nil { // If we can parse the url successfully
+		u.RawQuery = u.Query().Encode() // Decode and encode the query so its sorted in a canonical order
+		urlString = u.String()
+	}
+
+	key := method + " " + urlString
 
 	m.mu.Lock()
 	m.responders[key] = responder
