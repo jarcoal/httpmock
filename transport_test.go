@@ -438,3 +438,16 @@ func TestMockTransportCallCount(t *testing.T) {
 	}
 
 }
+
+func TestEncode(t *testing.T) {
+	url1 := "hello/world?b=1&query=string&query=aaa&b=a"
+	q1, _ := url.Parse(url1)
+	query1 := Encode(q1.Query())
+	url2 := "hello/world?query=aaa&query=string&b=1&b=a"
+	q2, _ := url.Parse(url2)
+	query2 := Encode(q2.Query())
+
+	if query1 != query2 {
+		t.Fatalf("Not the same! : q1 %s q2 %s", query1, query2)
+	}
+}

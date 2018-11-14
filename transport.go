@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -44,12 +45,7 @@ type MockTransport struct {
 // implement the http.RoundTripper interface.  You will not interact with this directly, instead
 // the *http.Client you are using will call it for you.
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	query := req.URL.Query().Encode()
-	url := req.URL.String()
-
-	if query != "" {
-		url = strings.Replace(url, req.URL.RawQuery, query, -1)
-	}
+	url := canonicalize(req.URL)
 
 	method := req.Method
 	if method == "" {
@@ -185,8 +181,7 @@ func (m *MockTransport) responderForKey(key string) Responder {
 func (m *MockTransport) RegisterResponder(method, urlString string, responder Responder) {
 	u, err := url.Parse(urlString)
 	if err == nil { // If we can parse the url successfully
-		u.RawQuery = u.Query().Encode() // Decode and encode the query so its sorted in a canonical order
-		urlString = u.String()
+		urlString = canonicalize(u) // Canonicalize it
 	}
 
 	key := method + " " + urlString
@@ -372,4 +367,44 @@ func RegisterResponder(method, url string, responder Responder) {
 // 		}
 func RegisterNoResponder(responder Responder) {
 	DefaultTransport.RegisterNoResponder(responder)
+}
+
+func canonicalize(req *url.URL) string {
+	query := Encode(req.Query())
+	url := req.String()
+
+	if query != "" {
+		url = strings.Replace(url, req.RawQuery, query, -1)
+	}
+
+	return url
+}
+
+// Encode is mostly taken from the standard libary
+// But it additionally Sorts values to deal with the case
+// Where you have multiple params
+func Encode(v url.Values) string {
+	if v == nil {
+		return ""
+	}
+	var buf strings.Builder
+	keys := make([]string, 0, len(v))
+	for k := range v {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		vs := v[k]
+		keyEscaped := url.QueryEscape(k)
+		sort.Strings(vs) // Sort our possible multiple params
+		for _, v := range vs {
+			if buf.Len() > 0 {
+				buf.WriteByte('&')
+			}
+			buf.WriteString(keyEscaped)
+			buf.WriteByte('=')
+			buf.WriteString(url.QueryEscape(v))
+		}
+	}
+	return buf.String()
 }
