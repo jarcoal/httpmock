@@ -158,7 +158,7 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 	// register the testUrl responder
 	RegisterResponder("GET", testUrl, NewStringResponder(200, "hello world"))
 
-	for _, suffix := range []string{"?", "?hello=world", "?hello=world#foo", "#foo"} {
+	for _, suffix := range []string{"?", "?hello=world", "?hello=world#foo", "?hello=world&hello=all", "#foo"} {
 		reqURL := testUrl + suffix
 
 		// make a request for the testUrl with a querystring
@@ -188,6 +188,9 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 		},
 		"/hello/world?query=string": {
 			testUrl + "hello/world?query=string",
+		},
+		"/hello/world?query=string&query=string2": {
+			testUrl + "hello/world?query=string&query=string2",
 		},
 		"/hello/world#fragment": {
 			testUrl + "hello/world#fragment",
