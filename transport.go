@@ -201,8 +201,9 @@ func (m *MockTransport) RegisterResponderWithQuery(method, path string, query ma
 	url := path
 	mapQuery := make(map[string][]string, len(query))
 	for key, e := range query {
-		mapQuery[key] = []string{e}
+		mapQuery[key] = strings.Split(e, " ")
 	}
+
 	queryString := mapToSortedQuery(mapQuery)
 	if queryString != nil {
 		url = path + "?" + *queryString
