@@ -36,30 +36,55 @@ func TestMockTransport(t *testing.T) {
 	defer Deactivate()
 
 	url := "https://github.com/"
-	body := "hello world"
+	body := `["hello world"]` + "\n"
 
 	RegisterResponder("GET", url, NewStringResponder(200, body))
 
-	resp, err := http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
+	// Read it as a simple string (ioutil.ReadAll will trigger io.EOF)
+	func() {
+		resp, err := http.Get(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
 
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+		data, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	if string(data) != body {
-		t.FailNow()
-	}
+		if string(data) != body {
+			t.FailNow()
+		}
 
-	// the http client wraps our NoResponderFound error, so we just try and match on text
-	if _, err := http.Get(testUrl); !strings.Contains(err.Error(),
-		NoResponderFound.Error()) {
+		// the http client wraps our NoResponderFound error, so we just try and match on text
+		if _, err := http.Get(testUrl); !strings.Contains(err.Error(),
+			NoResponderFound.Error()) {
 
-		t.Fatal(err)
+			t.Fatal(err)
+		}
+	}()
+
+	// Do it again, but twice with json decoder (json Decode will not
+	// reach EOF, but Close is called as the JSON response is complete)
+	for i := 0; i < 2; i++ {
+		func() {
+			resp, err := http.Get(url)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+
+			var res []string
+			err = json.NewDecoder(resp.Body).Decode(&res)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(res) != 1 || res[0] != "hello world" {
+				t.Fatalf(`%v read instead of ["hello world"]`, res)
+			}
+		}()
 	}
 }
 

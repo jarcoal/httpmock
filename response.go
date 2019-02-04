@@ -166,5 +166,6 @@ func (d *dummyReadCloser) Read(p []byte) (n int, err error) {
 }
 
 func (d *dummyReadCloser) Close() error {
+	d.body.Seek(0, 0)
 	return nil
 }
