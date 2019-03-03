@@ -208,21 +208,53 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 	defer DeactivateAndReset()
 
 	for responder, paths := range map[string][]string{
-		"/hello/world?query=string#fragment": {
-			testUrl + "hello/world?query=string#fragment",
+		// unsorted query string matches exactly
+		"/hello/world?query=string&abc=zz#fragment": {
+			testUrl + "hello/world?query=string&abc=zz#fragment",
 		},
-		"/hello/world?query=string": {
-			testUrl + "hello/world?query=string",
+		// sorted query string matches all cases
+		"/hello/world?abc=zz&query=string#fragment": {
+			testUrl + "hello/world?query=string&abc=zz#fragment",
+			testUrl + "hello/world?abc=zz&query=string#fragment",
 		},
-		"/hello/world?query=string&query=string2": {
-			testUrl + "hello/world?query=string&query=string2",
+		// unsorted query string matches exactly
+		"/hello/world?query=string&abc=zz": {
+			testUrl + "hello/world?query=string&abc=zz",
+		},
+		// sorted query string matches all cases
+		"/hello/world?abc=zz&query=string": {
+			testUrl + "hello/world?query=string&abc=zz",
+			testUrl + "hello/world?abc=zz&query=string",
+		},
+		// unsorted query string matches exactly
+		"/hello/world?query=string&query=string2&abc=zz": {
+			testUrl + "hello/world?query=string&query=string2&abc=zz",
+		},
+		// sorted query string matches all cases
+		"/hello/world?abc=zz&query=string&query=string2": {
+			testUrl + "hello/world?query=string&query=string2&abc=zz",
+			testUrl + "hello/world?query=string2&query=string&abc=zz",
+			testUrl + "hello/world?abc=zz&query=string2&query=string",
+		},
+		"/hello/world?query": {
+			testUrl + "hello/world?query",
+		},
+		"/hello/world?query&abc": {
+			testUrl + "hello/world?query&abc",
+			// testUrl + "hello/world?abc&query" won' work as "=" is needed, see below
+		},
+		// In case the sorting does not matter for received params without
+		// values, we must register params with "="
+		"/hello/world?abc=&query=": {
+			testUrl + "hello/world?query&abc",
+			testUrl + "hello/world?abc&query",
 		},
 		"/hello/world#fragment": {
 			testUrl + "hello/world#fragment",
 		},
 		"/hello/world": {
-			testUrl + "hello/world?query=string#fragment",
-			testUrl + "hello/world?query=string",
+			testUrl + "hello/world?query=string&abc=zz#fragment",
+			testUrl + "hello/world?query=string&abc=zz",
 			testUrl + "hello/world#fragment",
 			testUrl + "hello/world",
 		},
@@ -468,6 +500,9 @@ func TestMockTransportCallCount(t *testing.T) {
 }
 
 func TestRegisterResponderWithQuery(t *testing.T) {
+	// Just in case a panic occurs
+	defer DeactivateAndReset()
+
 	// create a custom http client w/ custom Roundtripper
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -479,30 +514,114 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 			TLSHandshakeTimeout: 60 * time.Second,
 		},
 	}
-	// activate mocks for the client
-	ActivateNonDefault(client)
-	defer DeactivateAndReset()
+
 	body := "hello world!"
 	testUrlPath := "http://acme.test/api"
-	expectedQuery := map[string]string{"a": "1", "b": "2"}
-	RegisterResponderWithQuery("GET", testUrlPath, expectedQuery, NewStringResponder(200, body))
-	testFullUrls := []string{testUrlPath + "?a=1&b=2", testUrlPath + "?b=2&a=1"}
-	for _, url := range testFullUrls {
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			t.Fatal(err)
+
+	for _, test := range []struct {
+		URL     string
+		Queries []interface{}
+		URLs    []string
+	}{
+		{
+			Queries: []interface{}{
+				map[string]string{"a": "1", "b": "2"},
+				"a=1&b=2",
+				"b=2&a=1",
+				url.Values{"a": []string{"1"}, "b": []string{"2"}},
+			},
+			URLs: []string{
+				"http://acme.test/api?a=1&b=2",
+				"http://acme.test/api?b=2&a=1",
+			},
+		},
+		{
+			Queries: []interface{}{
+				url.Values{
+					"a": []string{"3", "2", "1"},
+					"b": []string{"4", "2"},
+					"c": []string{""}, // is the net/url way to record params without values
+					// Test:
+					//   u, _ := url.Parse("/hello/world?query")
+					//   fmt.Printf("%d<%s>\n", len(u.Query()["query"]), u.Query()["query"][0])
+					//   // prints "1<>"
+				},
+				"a=1&b=2&a=3&c&b=4&a=2",
+				"b=2&a=1&c=&b=4&a=2&a=3",
+			},
+			URLs: []string{
+				testUrlPath + "?a=1&b=2&a=3&c&b=4&a=2",
+				testUrlPath + "?a=1&b=2&a=3&c=&b=4&a=2",
+				testUrlPath + "?b=2&a=1&c=&b=4&a=2&a=3",
+				testUrlPath + "?b=2&a=1&c&b=4&a=2&a=3",
+			},
+		},
+	} {
+		for _, query := range test.Queries {
+			ActivateNonDefault(client)
+			RegisterResponderWithQuery("GET", testUrlPath, query, NewStringResponder(200, body))
+
+			for _, url := range test.URLs {
+				req, err := http.NewRequest("GET", url, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				resp, err := client.Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				data, err := ioutil.ReadAll(resp.Body)
+				resp.Body.Close()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(data) != body {
+					t.Fatalf("query=%v URL=%s: %s ≠ %s", query, url, string(data), body)
+				}
+			}
+
+			DeactivateAndReset()
 		}
-		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatal(err)
+	}
+}
+
+func TestRegisterResponderWithQueryPanic(t *testing.T) {
+	resp := NewStringResponder(200, "hello world!")
+
+	for _, test := range []struct {
+		Query       interface{}
+		PanicPrefix string
+	}{
+		{
+			Query:       "%",
+			PanicPrefix: "RegisterResponderWithQuery bad query string: ",
+		},
+		{
+			Query:       1234,
+			PanicPrefix: "RegisterResponderWithQuery bad query type int. Only url.Values, map[string]string and string are allowed",
+		},
+	} {
+		var (
+			didntPanic bool
+			panicVal   interface{}
+		)
+		func() {
+			defer func() {
+				panicVal = recover()
+			}()
+
+			RegisterResponderWithQuery("GET", "foobar", test.Query, resp)
+			didntPanic = true
+		}()
+
+		if didntPanic {
+			t.Fatalf("RegisterResponderWithQuery + query=%v did not panic", test.Query)
 		}
-		defer resp.Body.Close()
-		data, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(data) != body {
-			t.FailNow()
+
+		panicStr, ok := panicVal.(string)
+		if !ok || !strings.HasPrefix(panicStr, test.PanicPrefix) {
+			t.Fatalf(`RegisterResponderWithQuery + query=%v panic="%v" expected prefix="%v"`,
+				test.Query, panicVal, test.PanicPrefix)
 		}
 	}
 }
