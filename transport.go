@@ -120,21 +120,24 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	// if we found a responder, call it
 	if responder != nil {
 		m.callCountInfo[key]++
 		m.totalCallCount++
-		return runCancelable(responder, req)
+	} else {
+		// we didn't find a responder, so fire the 'no responder' responder
+		if m.noResponder != nil {
+			m.callCountInfo["NO_RESPONDER"]++
+			m.totalCallCount++
+			responder = m.noResponder
+		}
 	}
+	m.mu.Unlock()
 
-	// we didn't find a responder, so fire the 'no responder' responder
-	if m.noResponder == nil {
+	if responder == nil {
 		return ConnectionFailure(req)
 	}
-	m.callCountInfo["NO_RESPONDER"]++
-	m.totalCallCount++
-	return runCancelable(m.noResponder, req)
+	return runCancelable(responder, req)
 }
 
 func runCancelable(responder Responder, req *http.Request) (*http.Response, error) {
