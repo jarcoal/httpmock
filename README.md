@@ -10,7 +10,7 @@ Uses gopkg to read from `v1` branch:
 
 You can also use vendoring for the v1 branch if you feel so inclined.
 
-Currently supports Go 1.7 - 1.10. 
+Currently supports Go 1.7 - 1.12. 
 
 ### Simple Example:
 ```go
