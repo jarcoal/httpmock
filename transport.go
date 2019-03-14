@@ -1,9 +1,11 @@
 package httpmock
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -44,17 +46,7 @@ type MockTransport struct {
 // implement the http.RoundTripper interface.  You will not interact with this directly, instead
 // the *http.Client you are using will call it for you.
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	queryAsMap := make(map[string][]string)
-	for k, v := range map[string][]string(req.URL.Query()) {
-		queryAsMap[k] = v
-	}
-
-	query := mapToSortedQuery(queryAsMap)
 	url := req.URL.String()
-
-	if query != nil {
-		url = strings.Replace(url, req.URL.RawQuery, *query, -1)
-	}
 
 	method := req.Method
 	if method == "" {
@@ -62,11 +54,24 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		method = http.MethodGet
 	}
 
-	// try and get a responder that matches the method and URL
+	// try and get a responder that matches the method and URL with
+	// query params untouched: http://z.tld/path?q...
 	key := method + " " + url
 	responder := m.responderForKey(key)
 
-	// if we weren't able to find a responder
+	// if we weren't able to find a responder, try with the URL *and*
+	// sorted query params
+	if responder == nil {
+		query := sortedQuery(req.URL.Query())
+		if query != "" {
+			// Replace unsorted query params by sorted ones:
+			//   http://z.tld/path?sorted_q...
+			key = method + " " + strings.Replace(url, req.URL.RawQuery, query, 1)
+			responder = m.responderForKey(key)
+		}
+	}
+
+	// if we weren't able to find a responder, try without any query params
 	if responder == nil {
 		strippedURL := *req.URL
 		strippedURL.RawQuery = ""
@@ -79,7 +84,7 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		hasQueryString := url != surl
 
 		// if the URL contains a querystring then we strip off the
-		// querystring and try again.
+		// querystring and try again: http://z.tld/path
 		if hasQueryString {
 			key = method + " " + surl
 			responder = m.responderForKey(key)
@@ -89,17 +94,26 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// the path part only
 		if responder == nil {
 			keyPathAlone := method + " " + req.URL.Path
-			key = keyPathAlone
 
-			// First with querystring
+			// First with unsorted querystring: /path?q...
 			if hasQueryString {
-				key += strings.TrimPrefix(url, surl) // concat after-path part
+				key = keyPathAlone + strings.TrimPrefix(url, surl) // concat after-path part
 				responder = m.responderForKey(key)
+
+				// Then with sorted querystring: /path?sorted_q...
+				if responder == nil {
+					key = keyPathAlone + "?" + sortedQuery(req.URL.Query())
+					if req.URL.Fragment != "" {
+						key += "#" + req.URL.Fragment
+					}
+					responder = m.responderForKey(key)
+				}
 			}
 
-			// Then using path alone
-			if responder == nil || key == keyPathAlone {
-				responder = m.responderForKey(keyPathAlone)
+			// Then using path alone: /path
+			if responder == nil {
+				key = keyPathAlone
+				responder = m.responderForKey(key)
 			}
 		}
 	}
@@ -185,8 +199,13 @@ func (m *MockTransport) responderForKey(key string) Responder {
 	return m.responders[key]
 }
 
-// RegisterResponder adds a new responder, associated with a given HTTP method and URL (or path).  When a
-// request comes in that matches, the responder will be called and the response returned to the client.
+// RegisterResponder adds a new responder, associated with a given
+// HTTP method and URL (or path).
+//
+// When a request comes in that matches, the responder will be called
+// and the response returned to the client.
+//
+// If url contains query parameters, their order matters.
 func (m *MockTransport) RegisterResponder(method, url string, responder Responder) {
 	key := method + " " + url
 
@@ -196,40 +215,79 @@ func (m *MockTransport) RegisterResponder(method, url string, responder Responde
 	m.mu.Unlock()
 }
 
-// RegisterResponderWithQuery is same as RegisterResponder, but it doesn't depend on query items order
-func (m *MockTransport) RegisterResponderWithQuery(method, path string, query map[string]string, responder Responder) {
-	url := path
-	mapQuery := make(map[string][]string, len(query))
-	for key, e := range query {
-		mapQuery[key] = []string{e}
+// RegisterResponderWithQuery is same as RegisterResponder, but it
+// doesn't depend on query items order.
+//
+// query type can be:
+//   url.Values
+//   map[string]string
+//   string, a query string like "a=12&a=13&b=z&c" (see net/url.ParseQuery function)
+//
+// If the query type is not recognized or the string cannot be parsed
+// using net/url.ParseQuery, a panic() occurs.
+func (m *MockTransport) RegisterResponderWithQuery(method, path string, query interface{}, responder Responder) {
+	var mapQuery url.Values
+	switch q := query.(type) {
+	case url.Values:
+		mapQuery = q
+
+	case map[string]string:
+		mapQuery = make(url.Values, len(q))
+		for key, e := range q {
+			mapQuery[key] = []string{e}
+		}
+
+	case string:
+		var err error
+		mapQuery, err = url.ParseQuery(q)
+		if err != nil {
+			panic("RegisterResponderWithQuery bad query string: " + err.Error())
+		}
+
+	default:
+		panic(fmt.Sprintf("RegisterResponderWithQuery bad query type %T. Only url.Values, map[string]string and string are allowed", query))
 	}
-	queryString := mapToSortedQuery(mapQuery)
-	if queryString != nil {
-		url = path + "?" + *queryString
+
+	if queryString := sortedQuery(mapQuery); queryString != "" {
+		path += "?" + queryString
 	}
-	m.RegisterResponder(method, url, responder)
+	m.RegisterResponder(method, path, responder)
 }
 
-func mapToSortedQuery(m map[string][]string) *string {
-	if m == nil {
-		return nil
+func sortedQuery(m url.Values) string {
+	if len(m) == 0 {
+		return ""
 	}
+
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
 	}
-	if len(keys) == 0 {
-		return nil
-	}
 	sort.Strings(keys)
-	var queryArray []string
+
+	var b bytes.Buffer
+	var values []string
+
 	for _, k := range keys {
+		// Do not alter the passed url.Values
 		for _, v := range m[k] {
-			queryArray = append(queryArray, fmt.Sprintf("%s=%s", k, v))
+			values = append(values, v)
 		}
+		sort.Strings(values)
+
+		k = url.QueryEscape(k)
+
+		for _, v := range values {
+			if b.Len() > 0 {
+				b.WriteByte('&')
+			}
+			fmt.Fprintf(&b, "%v=%v", k, url.QueryEscape(v))
+		}
+
+		values = values[:0]
 	}
-	query := strings.Join(queryArray, "&")
-	return &query
+
+	return b.String()
 }
 
 // RegisterNoResponder is used to register a responder that will be called if no other responder is
@@ -394,25 +452,69 @@ func RegisterResponder(method, url string, responder Responder) {
 	DefaultTransport.RegisterResponder(method, url, responder)
 }
 
-// RegisterResponderWithQuery it is same as RegisterResponder, but doesn't depends on query objects order.
+// RegisterResponderWithQuery it is same as RegisterResponder, but
+// doesn't depends on query items order.
 //
-// Example:
+// query type can be:
+//   url.Values
+//   map[string]string
+//   string, a query string like "a=12&a=13&b=z&c" (see net/url.ParseQuery function)
+//
+// If the query type is not recognized or the string cannot be parsed
+// using net/url.ParseQuery, a panic() occurs.
+//
+// Example using a net/url.Values:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
 // 			httpmock.DeactivateAndReset()
-// 			expecedQuery := map[string]string{
+//
+// 			expectedQuery := net.Values{
+//				"a": []string{"3", "1", "8"},
+//				"b": []string{"4", "2"},
+//			}
+// 			httpmock.RegisterResponderWithQueryValues("GET", "http://example.com/", expectedQuery,
+// 				httpmock.NewStringResponder("hello world", 200))
+//
+//			// requests to http://example.com?a=1&a=3&a=8&b=2&b=4
+//			//      and to http://example.com?b=4&a=2&b=2&a=8&a=1
+//			// will now return 'hello world'
+// 		}
+//
+// or using a map[string]string:
+// 		func TestFetchArticles(t *testing.T) {
+// 			httpmock.Activate()
+// 			httpmock.DeactivateAndReset()
+//
+// 			expectedQuery := map[string]string{
 //				"a": "1",
 //				"b": "2"
 //			}
-//
-// 			httpmock.RegisterResponderWithQuery("GET", "http://example.com/", expecedQuery,
+// 			httpmock.RegisterResponderWithQuery("GET", "http://example.com/", expectedQuery,
 // 				httpmock.NewStringResponder("hello world", 200))
 //
 //			// requests to http://example.com?a=1&b=2 and http://example.com?b=2&a=1 will now return 'hello world'
 // 		}
-func RegisterResponderWithQuery(method, path string, query map[string]string, responder Responder) {
+//
+// or using a query string:
+// 		func TestFetchArticles(t *testing.T) {
+// 			httpmock.Activate()
+// 			httpmock.DeactivateAndReset()
+//
+// 			expectedQuery := "a=3&b=4&b=2&a=1&a=8"
+// 			httpmock.RegisterResponderWithQueryValues("GET", "http://example.com/", expectedQuery,
+// 				httpmock.NewStringResponder("hello world", 200))
+//
+//			// requests to http://example.com?a=1&a=3&a=8&b=2&b=4
+//			//      and to http://example.com?b=4&a=2&b=2&a=8&a=1
+//			// will now return 'hello world'
+// 		}
+func RegisterResponderWithQuery(method, path string, query interface{}, responder Responder) {
 	DefaultTransport.RegisterResponderWithQuery(method, path, query, responder)
 }
+
+// RegisterResponderWithQueryValues it is same as RegisterResponder, but doesn't depends on query objects order.
+//
+// Example:
 
 // RegisterNoResponder adds a mock that will be called whenever a request for an unregistered URL
 // is received.  The default behavior is to return a connection error.
