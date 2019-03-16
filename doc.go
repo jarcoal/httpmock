@@ -1,5 +1,5 @@
 /*
-HTTPmock provides tools for mocking HTTP responses.
+Package httpmock provides tools for mocking HTTP responses.
 
 Simple Example:
 	func TestFetchArticles(t *testing.T) {

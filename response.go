@@ -63,7 +63,7 @@ func NewBytesResponder(status int, body []byte) Responder {
 
 // NewJsonResponse creates an *http.Response with a body that is a json encoded representation of
 // the given interface{}.  Also accepts an http status code.
-func NewJsonResponse(status int, body interface{}) (*http.Response, error) {
+func NewJsonResponse(status int, body interface{}) (*http.Response, error) { // nolint: golint
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func NewJsonResponse(status int, body interface{}) (*http.Response, error) {
 
 // NewJsonResponder creates a Responder from a given body (as an interface{} that is encoded to
 // json) and status code.
-func NewJsonResponder(status int, body interface{}) (Responder, error) {
+func NewJsonResponder(status int, body interface{}) (Responder, error) { // nolint: golint
 	resp, err := NewJsonResponse(status, body)
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func NewJsonResponder(status int, body interface{}) (Responder, error) {
 //     "/test/path",
 //     NewJSONResponderOrPanic(200, &MyBody),
 //   )
-func NewJsonResponderOrPanic(status int, body interface{}) Responder {
+func NewJsonResponderOrPanic(status int, body interface{}) Responder { // nolint: golint
 	responder, err := NewJsonResponder(status, body)
 	if err != nil {
 		panic(err)
@@ -103,7 +103,7 @@ func NewJsonResponderOrPanic(status int, body interface{}) Responder {
 
 // NewXmlResponse creates an *http.Response with a body that is an xml encoded representation
 // of the given interface{}.  Also accepts an http status code.
-func NewXmlResponse(status int, body interface{}) (*http.Response, error) {
+func NewXmlResponse(status int, body interface{}) (*http.Response, error) { // nolint: golint
 	encoded, err := xml.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -115,7 +115,7 @@ func NewXmlResponse(status int, body interface{}) (*http.Response, error) {
 
 // NewXmlResponder creates a Responder from a given body (as an interface{} that is encoded to xml)
 // and status code.
-func NewXmlResponder(status int, body interface{}) (Responder, error) {
+func NewXmlResponder(status int, body interface{}) (Responder, error) { // nolint: golint
 	resp, err := NewXmlResponse(status, body)
 	if err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ func NewXmlResponder(status int, body interface{}) (Responder, error) {
 //     "/test/path",
 //     NewXmlResponderOrPanic(200, &MyBody),
 //   )
-func NewXmlResponderOrPanic(status int, body interface{}) Responder {
+func NewXmlResponderOrPanic(status int, body interface{}) Responder { // nolint: golint
 	responder, err := NewXmlResponder(status, body)
 	if err != nil {
 		panic(err)
@@ -160,12 +160,12 @@ type dummyReadCloser struct {
 func (d *dummyReadCloser) Read(p []byte) (n int, err error) {
 	n, err = d.body.Read(p)
 	if err == io.EOF {
-		d.body.Seek(0, 0)
+		d.body.Seek(0, 0) // nolint: errcheck
 	}
 	return n, err
 }
 
 func (d *dummyReadCloser) Close() error {
-	d.body.Seek(0, 0)
+	d.body.Seek(0, 0) // nolint: errcheck
 	return nil
 }

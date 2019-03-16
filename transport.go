@@ -11,11 +11,12 @@ import (
 	"sync"
 )
 
-// Responders are callbacks that receive and http request and return a mocked response.
+// Responder is a callback that receives and http request and returns
+// a mocked response.
 type Responder func(*http.Request) (*http.Response, error)
 
 // NoResponderFound is returned when no responders are found for a given HTTP method and URL.
-var NoResponderFound = errors.New("no responder found")
+var NoResponderFound = errors.New("no responder found") // nolint: golint
 
 // ConnectionFailure is a responder that returns a connection failure.  This is the default
 // responder, and is called when no other matching responder is found.
@@ -137,7 +138,8 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func runCancelable(responder Responder, req *http.Request) (*http.Response, error) {
-	if req.Cancel == nil {
+	// TODO: replace req.Cancel by ctx
+	if req.Cancel == nil { // nolint: staticcheck
 		return responder(req)
 	}
 
@@ -154,7 +156,8 @@ func runCancelable(responder Responder, req *http.Request) (*http.Response, erro
 
 	go func() {
 		select {
-		case <-req.Cancel:
+		// TODO: req.Cancel replace by ctx
+		case <-req.Cancel: // nolint: staticcheck
 			resultch <- result{
 				response: nil,
 				err:      errors.New("request canceled"),
@@ -189,10 +192,10 @@ func runCancelable(responder Responder, req *http.Request) (*http.Response, erro
 	return r.response, r.err
 }
 
-// do nothing with timeout
+// CancelRequest does nothing with timeout.
 func (m *MockTransport) CancelRequest(req *http.Request) {}
 
-// responderForKey returns a responder for a given key
+// responderForKey returns a responder for a given key.
 func (m *MockTransport) responderForKey(key string) Responder {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -266,13 +269,11 @@ func sortedQuery(m url.Values) string {
 	sort.Strings(keys)
 
 	var b bytes.Buffer
-	var values []string
+	var values []string // nolint: prealloc
 
 	for _, k := range keys {
 		// Do not alter the passed url.Values
-		for _, v := range m[k] {
-			values = append(values, v)
-		}
+		values = append(values, m[k]...)
 		sort.Strings(values)
 
 		k = url.QueryEscape(k)
