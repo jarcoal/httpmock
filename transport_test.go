@@ -413,8 +413,10 @@ func TestMockTransportRespectsCancel(t *testing.T) {
 
 		if err != nil {
 			got := err.(*url.Error)
-			if !reflect.DeepEqual(got.Err, c.expectedErr) {
-				t.Errorf("Expected: %#v, got: %#v", c.expectedErr, got.Err)
+			// Do not use reflect.DeepEqual as go 1.13 includes stack frames
+			// into errors issued by errors.New()
+			if c.expectedErr == nil || got.Err.Error() != c.expectedErr.Error() {
+				t.Errorf("Expected error: %v, got: %v", c.expectedErr, got.Err)
 			}
 		}
 

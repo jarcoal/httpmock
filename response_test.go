@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
-	"reflect"
 	"testing"
 )
 
@@ -150,7 +149,9 @@ func TestNewXmlResponse(t *testing.T) {
 }
 
 func TestNewErrorResponder(t *testing.T) {
-	responder := NewErrorResponder(errors.New("oh no"))
+	// From go1.13, a stack frame is stored into errors issued by errors.New()
+	origError := errors.New("oh no")
+	responder := NewErrorResponder(origError)
 	req, err := http.NewRequest(http.MethodGet, testURL, nil)
 	if err != nil {
 		t.Fatal("Error creating request")
@@ -159,9 +160,8 @@ func TestNewErrorResponder(t *testing.T) {
 	if response != nil {
 		t.Error("Response should be nil")
 	}
-	expected := errors.New("oh no")
-	if !reflect.DeepEqual(err, expected) {
-		t.Errorf("Expected error %#v, got: %#v", expected, err)
+	if err != origError {
+		t.Errorf("Expected error %#v, got: %#v", origError, err)
 	}
 }
 
