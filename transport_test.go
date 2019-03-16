@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-var testUrl = "http://www.example.com/"
+var testURL = "http://www.example.com/"
 
 func assertBody(t *testing.T, resp *http.Response, expected string) {
 	defer resp.Body.Close()
@@ -58,7 +58,7 @@ func TestMockTransport(t *testing.T) {
 		}
 
 		// the http client wraps our NoResponderFound error, so we just try and match on text
-		if _, err := http.Get(testUrl); !strings.Contains(err.Error(),
+		if _, err := http.Get(testURL); !strings.Contains(err.Error(),
 			NoResponderFound.Error()) {
 
 			t.Fatal(err)
@@ -132,7 +132,7 @@ func TestMockTransportReset(t *testing.T) {
 		t.Fatal("expected no responders at this point")
 	}
 
-	RegisterResponder("GET", testUrl, nil)
+	RegisterResponder("GET", testURL, nil)
 
 	if len(DefaultTransport.responders) != 1 {
 		t.Fatal("expected one responder")
@@ -155,13 +155,13 @@ func TestMockTransportNoResponder(t *testing.T) {
 		t.Fatal("expected noResponder to be nil")
 	}
 
-	if _, err := http.Get(testUrl); err == nil {
+	if _, err := http.Get(testURL); err == nil {
 		t.Fatal("expected to receive a connection error due to lack of responders")
 	}
 
 	RegisterNoResponder(NewStringResponder(200, "hello world"))
 
-	resp, err := http.Get(testUrl)
+	resp, err := http.Get(testURL)
 	if err != nil {
 		t.Fatal("expected request to succeed")
 	}
@@ -180,13 +180,13 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 	Activate()
 	defer DeactivateAndReset()
 
-	// register the testUrl responder
-	RegisterResponder("GET", testUrl, NewStringResponder(200, "hello world"))
+	// register the testURL responder
+	RegisterResponder("GET", testURL, NewStringResponder(200, "hello world"))
 
 	for _, suffix := range []string{"?", "?hello=world", "?hello=world#foo", "?hello=world&hello=all", "#foo"} {
-		reqURL := testUrl + suffix
+		reqURL := testURL + suffix
 
-		// make a request for the testUrl with a querystring
+		// make a request for the testURL with a querystring
 		resp, err := http.Get(reqURL)
 		if err != nil {
 			t.Fatalf("expected request %s to succeed", reqURL)
@@ -210,53 +210,53 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 	for responder, paths := range map[string][]string{
 		// unsorted query string matches exactly
 		"/hello/world?query=string&abc=zz#fragment": {
-			testUrl + "hello/world?query=string&abc=zz#fragment",
+			testURL + "hello/world?query=string&abc=zz#fragment",
 		},
 		// sorted query string matches all cases
 		"/hello/world?abc=zz&query=string#fragment": {
-			testUrl + "hello/world?query=string&abc=zz#fragment",
-			testUrl + "hello/world?abc=zz&query=string#fragment",
+			testURL + "hello/world?query=string&abc=zz#fragment",
+			testURL + "hello/world?abc=zz&query=string#fragment",
 		},
 		// unsorted query string matches exactly
 		"/hello/world?query=string&abc=zz": {
-			testUrl + "hello/world?query=string&abc=zz",
+			testURL + "hello/world?query=string&abc=zz",
 		},
 		// sorted query string matches all cases
 		"/hello/world?abc=zz&query=string": {
-			testUrl + "hello/world?query=string&abc=zz",
-			testUrl + "hello/world?abc=zz&query=string",
+			testURL + "hello/world?query=string&abc=zz",
+			testURL + "hello/world?abc=zz&query=string",
 		},
 		// unsorted query string matches exactly
 		"/hello/world?query=string&query=string2&abc=zz": {
-			testUrl + "hello/world?query=string&query=string2&abc=zz",
+			testURL + "hello/world?query=string&query=string2&abc=zz",
 		},
 		// sorted query string matches all cases
 		"/hello/world?abc=zz&query=string&query=string2": {
-			testUrl + "hello/world?query=string&query=string2&abc=zz",
-			testUrl + "hello/world?query=string2&query=string&abc=zz",
-			testUrl + "hello/world?abc=zz&query=string2&query=string",
+			testURL + "hello/world?query=string&query=string2&abc=zz",
+			testURL + "hello/world?query=string2&query=string&abc=zz",
+			testURL + "hello/world?abc=zz&query=string2&query=string",
 		},
 		"/hello/world?query": {
-			testUrl + "hello/world?query",
+			testURL + "hello/world?query",
 		},
 		"/hello/world?query&abc": {
-			testUrl + "hello/world?query&abc",
-			// testUrl + "hello/world?abc&query" won' work as "=" is needed, see below
+			testURL + "hello/world?query&abc",
+			// testURL + "hello/world?abc&query" won' work as "=" is needed, see below
 		},
 		// In case the sorting does not matter for received params without
 		// values, we must register params with "="
 		"/hello/world?abc=&query=": {
-			testUrl + "hello/world?query&abc",
-			testUrl + "hello/world?abc&query",
+			testURL + "hello/world?query&abc",
+			testURL + "hello/world?abc&query",
 		},
 		"/hello/world#fragment": {
-			testUrl + "hello/world#fragment",
+			testURL + "hello/world#fragment",
 		},
 		"/hello/world": {
-			testUrl + "hello/world?query=string&abc=zz#fragment",
-			testUrl + "hello/world?query=string&abc=zz",
-			testUrl + "hello/world#fragment",
-			testUrl + "hello/world",
+			testURL + "hello/world?query=string&abc=zz#fragment",
+			testURL + "hello/world?query=string&abc=zz",
+			testURL + "hello/world#fragment",
+			testURL + "hello/world",
 		},
 	} {
 		Activate()
@@ -265,7 +265,7 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 		RegisterResponder("GET", responder, NewStringResponder(200, "hello world"))
 
 		for _, reqURL := range paths {
-			// make a request for the testUrl with a querystring
+			// make a request for the testURL with a querystring
 			resp, err := http.Get(reqURL)
 			if err != nil {
 				t.Fatalf("%s: expected request %s to succeed", responder, reqURL)
@@ -329,9 +329,9 @@ func TestMockTransportNonDefault(t *testing.T) {
 
 	body := "hello world!"
 
-	RegisterResponder("GET", testUrl, NewStringResponder(200, body))
+	RegisterResponder("GET", testURL, NewStringResponder(200, body))
 
-	req, err := http.NewRequest("GET", testUrl, nil)
+	req, err := http.NewRequest("GET", testURL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,24 +380,25 @@ func TestMockTransportRespectsCancel(t *testing.T) {
 	for _, c := range cases {
 		Reset()
 		if c.withPanic {
-			RegisterResponder("GET", testUrl, func(r *http.Request) (*http.Response, error) {
+			RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
 				time.Sleep(time.Millisecond)
 				panic("oh no")
 			})
 		} else {
-			RegisterResponder("GET", testUrl, func(r *http.Request) (*http.Response, error) {
+			RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
 				time.Sleep(time.Millisecond)
 				return NewStringResponse(http.StatusOK, "hello world"), nil
 			})
 		}
 
-		req, err := http.NewRequest("GET", testUrl, nil)
+		req, err := http.NewRequest("GET", testURL, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if c.withCancel {
 			cancel := make(chan struct{}, 1)
-			req.Cancel = cancel
+			// TODO: replace req.Cancel by ctx
+			req.Cancel = cancel // nolint: staticcheck
 			if c.cancelNow {
 				cancel <- struct{}{}
 			}
@@ -433,14 +434,14 @@ func TestMockTransportRespectsTimeout(t *testing.T) {
 	defer DeactivateAndReset()
 
 	RegisterResponder(
-		"GET", testUrl,
+		"GET", testURL,
 		func(r *http.Request) (*http.Response, error) {
 			time.Sleep(2 * timeout)
 			return NewStringResponse(http.StatusOK, ""), nil
 		},
 	)
 
-	_, err := client.Get(testUrl)
+	_, err := client.Get(testURL)
 	if err == nil {
 		t.Fail()
 	}
@@ -463,7 +464,7 @@ func TestMockTransportCallCount(t *testing.T) {
 	}
 
 	buff := new(bytes.Buffer)
-	json.NewEncoder(buff).Encode("{}")
+	json.NewEncoder(buff).Encode("{}") // nolint: errcheck
 	_, err1 := http.Post(url2, "application/json", buff)
 	if err1 != nil {
 		t.Fatal(err1)
@@ -516,7 +517,7 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 	}
 
 	body := "hello world!"
-	testUrlPath := "http://acme.test/api"
+	testURLPath := "http://acme.test/api"
 
 	for _, test := range []struct {
 		URL     string
@@ -550,16 +551,16 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 				"b=2&a=1&c=&b=4&a=2&a=3",
 			},
 			URLs: []string{
-				testUrlPath + "?a=1&b=2&a=3&c&b=4&a=2",
-				testUrlPath + "?a=1&b=2&a=3&c=&b=4&a=2",
-				testUrlPath + "?b=2&a=1&c=&b=4&a=2&a=3",
-				testUrlPath + "?b=2&a=1&c&b=4&a=2&a=3",
+				testURLPath + "?a=1&b=2&a=3&c&b=4&a=2",
+				testURLPath + "?a=1&b=2&a=3&c=&b=4&a=2",
+				testURLPath + "?b=2&a=1&c=&b=4&a=2&a=3",
+				testURLPath + "?b=2&a=1&c&b=4&a=2&a=3",
 			},
 		},
 	} {
 		for _, query := range test.Queries {
 			ActivateNonDefault(client)
-			RegisterResponderWithQuery("GET", testUrlPath, query, NewStringResponder(200, body))
+			RegisterResponderWithQuery("GET", testURLPath, query, NewStringResponder(200, body))
 
 			for _, url := range test.URLs {
 				req, err := http.NewRequest("GET", url, nil)
