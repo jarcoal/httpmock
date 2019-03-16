@@ -340,8 +340,7 @@ var DefaultTransport = NewMockTransport()
 var InitialTransport = http.DefaultTransport
 
 // Used to handle custom http clients (i.e clients other than http.DefaultClient)
-var oldTransport http.RoundTripper
-var oldClient *http.Client
+var oldClients = map[*http.Client]http.RoundTripper{}
 
 // Activate starts the mock environment.  This should be called before your tests run.  Under the
 // hood this replaces the Transport on the http.DefaultClient with DefaultTransport.
@@ -383,8 +382,9 @@ func ActivateNonDefault(client *http.Client) {
 	}
 
 	// save the custom client & it's RoundTripper
-	oldTransport = client.Transport
-	oldClient = client
+	if _, ok := oldClients[client]; !ok {
+		oldClients[client] = client.Transport
+	}
 	client.Transport = DefaultTransport
 }
 
@@ -417,9 +417,10 @@ func Deactivate() {
 	}
 	http.DefaultTransport = InitialTransport
 
-	// reset the custom client to use it's original RoundTripper
-	if oldClient != nil {
+	// reset the custom clients to use their original RoundTripper
+	for oldClient, oldTransport := range oldClients {
 		oldClient.Transport = oldTransport
+		delete(oldClients, oldClient)
 	}
 }
 
