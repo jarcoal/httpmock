@@ -1,4 +1,4 @@
-# httpmock [![Build Status](https://travis-ci.org/jarcoal/httpmock.png?branch=master)](https://travis-ci.org/jarcoal/httpmock)
+# httpmock [![Build Status](https://travis-ci.org/jarcoal/httpmock.png?branch=v1)](https://travis-ci.org/jarcoal/httpmock) [![Coverage Status](https://coveralls.io/repos/github/jarcoal/httpmock/badge.svg?branch=v1)](https://coveralls.io/github/jarcoal/httpmock?branch=v1) [![GoDoc](https://godoc.org/github.com/jarcoal/httpmock?status.svg)](https://godoc.org/github.com/jarcoal/httpmock) [![Version](https://img.shields.io/github/tag/jarcoal/httpmock.svg)](https://github.com/jarcoal/httpmock/releases)
 
 Easy mocking of http responses from external resources.
 
