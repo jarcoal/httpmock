@@ -4,13 +4,63 @@ Easy mocking of http responses from external resources.
 
 ## Install
 
-Uses gopkg to read from `v1` branch:
+Currently supports Go 1.7 - 1.12.
 
-    go get gopkg.in/jarcoal/httpmock.v1
+`v1` branch has to be used instead of `master`.
 
-You can also use vendoring for the v1 branch if you feel so inclined.
 
-Currently supports Go 1.7 - 1.12. 
+### Using go modules (aka. `go mod`)
+
+In your go files, simply use:
+```go
+import "github.com/jarcoal/httpmock"
+```
+
+Then next `go mod tidy` or `go test` invocation will automatically
+populate your `go.mod` with the last httpmock release, now
+[![Version](https://img.shields.io/github/tag/jarcoal/httpmock.svg)](https://github.com/jarcoal/httpmock/releases).
+
+Note you can use `go mod vendor` to vendor your dependencies.
+
+
+### Using `$GOPATH`
+
+`v1` branch is configured as the default branch in github, so:
+```
+go get github.com/jarcoal/httpmock
+```
+
+automatically downloads the `v1` branch in `$GOPATH/src`. Then in your
+go files use:
+```go
+import "github.com/jarcoal/httpmock"
+```
+
+
+### Vendoring, using [`govendor`](https://github.com/kardianos/govendor) for example
+
+When vendoring is used, `v1` branch has to be specified. Two choices here:
+
+- preferred way:
+  ```
+  govendor fetch github.com/jarcoal/httpmock@v1
+  ```
+  then in go files:
+  ```go
+  import "github.com/jarcoal/httpmock"
+  ```
+- old way (before `v1` was set as default branch), use gopkg to read from
+  `v1` branch:
+  ```
+  govendor fetch gopkg.in/jarcoal/httpmock.v1
+  ```
+  then in go files:
+  ```go
+  import "gopkg.in/jarcoal/httpmock.v1"
+  ```
+
+
+## Usage
 
 ### Simple Example:
 ```go
@@ -21,12 +71,12 @@ func TestFetchArticles(t *testing.T) {
 	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
 		httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
 
-  // get count info
-  httpmock.GetTotalCallCount()
+	// get count info
+	httpmock.GetTotalCallCount()
 
-  // get the amount of calls for the registered responder
-  info := httpmock.GetCallCountInfo()
-  info["GET https://api.mybiz.com/articles.json"] // number of GET calls made to https://api.mybiz.com/articles.json
+	// get the amount of calls for the registered responder
+	info := httpmock.GetCallCountInfo()
+	info["GET https://api.mybiz.com/articles.json"] // number of GET calls made to https://api.mybiz.com/articles.json
 
 	// do stuff that makes a request to articles.json
 }
@@ -158,7 +208,7 @@ var _ = Describe("Articles", func() {
 		// fetch the article into struct
 		articleObject := &models.Article{}
 		_, err := resty.R().SetResult(articleObject).Get(fakeUrl)
-		
+
 		// do stuff with the article object ...
 	})
 })
