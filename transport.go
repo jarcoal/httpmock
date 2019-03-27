@@ -444,7 +444,7 @@ func DeactivateAndReset() {
 // Example:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
-// 			httpmock.DeactivateAndReset()
+// 			defer httpmock.DeactivateAndReset()
 //
 // 			httpmock.RegisterResponder("GET", "http://example.com/",
 // 				httpmock.NewStringResponder(200, "hello world"))
@@ -473,7 +473,7 @@ func RegisterResponder(method, url string, responder Responder) {
 // Example using a net/url.Values:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
-// 			httpmock.DeactivateAndReset()
+// 			defer httpmock.DeactivateAndReset()
 //
 // 			expectedQuery := net.Values{
 //				"a": []string{"3", "1", "8"},
@@ -490,7 +490,7 @@ func RegisterResponder(method, url string, responder Responder) {
 // or using a map[string]string:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
-// 			httpmock.DeactivateAndReset()
+// 			defer httpmock.DeactivateAndReset()
 //
 // 			expectedQuery := map[string]string{
 //				"a": "1",
@@ -505,7 +505,7 @@ func RegisterResponder(method, url string, responder Responder) {
 // or using a query string:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
-// 			httpmock.DeactivateAndReset()
+// 			defer httpmock.DeactivateAndReset()
 //
 // 			expectedQuery := "a=3&b=4&b=2&a=1&a=8"
 // 			httpmock.RegisterResponderWithQueryValues("GET", "http://example.com/", expectedQuery,
@@ -519,17 +519,13 @@ func RegisterResponderWithQuery(method, path string, query interface{}, responde
 	DefaultTransport.RegisterResponderWithQuery(method, path, query, responder)
 }
 
-// RegisterResponderWithQueryValues it is same as RegisterResponder, but doesn't depends on query objects order.
-//
-// Example:
-
 // RegisterNoResponder adds a mock that will be called whenever a request for an unregistered URL
 // is received.  The default behavior is to return a connection error.
 //
 // In some cases you may not want all URLs to be mocked, in which case you can do this:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
-// 			httpmock.DeactivateAndReset()
+// 			defer httpmock.DeactivateAndReset()
 //			httpmock.RegisterNoResponder(httpmock.InitialTransport.RoundTrip)
 //
 // 			// any requests that don't have a registered URL will be fetched normally
