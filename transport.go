@@ -141,8 +141,8 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func runCancelable(responder Responder, req *http.Request) (*http.Response, error) {
-	// TODO: replace req.Cancel by ctx
-	if req.Cancel == nil { // nolint: staticcheck
+	ctx := req.Context()
+	if req.Cancel == nil && ctx.Done() == nil { // nolint: staticcheck
 		return responder(req)
 	}
 
@@ -159,11 +159,15 @@ func runCancelable(responder Responder, req *http.Request) (*http.Response, erro
 
 	go func() {
 		select {
-		// TODO: req.Cancel replace by ctx
 		case <-req.Cancel: // nolint: staticcheck
 			resultch <- result{
 				response: nil,
 				err:      errors.New("request canceled"),
+			}
+		case <-ctx.Done():
+			resultch <- result{
+				response: nil,
+				err:      ctx.Err(),
 			}
 		case <-done:
 		}
@@ -188,15 +192,13 @@ func runCancelable(responder Responder, req *http.Request) (*http.Response, erro
 
 	r := <-resultch
 
-	// if a close(req.Cancel) is never coming,
-	// we'll need to unblock the first goroutine.
+	// if a cancel() issued from context.WithCancel() or a
+	// close(req.Cancel) are never coming, we'll need to unblock the
+	// first goroutine.
 	done <- struct{}{}
 
 	return r.response, r.err
 }
-
-// CancelRequest does nothing with timeout.
-func (m *MockTransport) CancelRequest(req *http.Request) {}
 
 // responderForKey returns a responder for a given key.
 func (m *MockTransport) responderForKey(key string) Responder {
