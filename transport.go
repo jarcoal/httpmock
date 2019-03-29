@@ -141,8 +141,8 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func runCancelable(responder Responder, req *http.Request) (*http.Response, error) {
-	// TODO: replace req.Cancel by ctx
-	if req.Cancel == nil { // nolint: staticcheck
+	ctx := req.Context()
+	if req.Cancel == nil && ctx.Done() == nil { // nolint: staticcheck
 		return responder(req)
 	}
 
@@ -159,11 +159,15 @@ func runCancelable(responder Responder, req *http.Request) (*http.Response, erro
 
 	go func() {
 		select {
-		// TODO: req.Cancel replace by ctx
 		case <-req.Cancel: // nolint: staticcheck
 			resultch <- result{
 				response: nil,
 				err:      errors.New("request canceled"),
+			}
+		case <-ctx.Done():
+			resultch <- result{
+				response: nil,
+				err:      ctx.Err(),
 			}
 		case <-done:
 		}
@@ -188,15 +192,13 @@ func runCancelable(responder Responder, req *http.Request) (*http.Response, erro
 
 	r := <-resultch
 
-	// if a close(req.Cancel) is never coming,
-	// we'll need to unblock the first goroutine.
+	// if a cancel() issued from context.WithCancel() or a
+	// close(req.Cancel) are never coming, we'll need to unblock the
+	// first goroutine.
 	done <- struct{}{}
 
 	return r.response, r.err
 }
-
-// CancelRequest does nothing with timeout.
-func (m *MockTransport) CancelRequest(req *http.Request) {}
 
 // responderForKey returns a responder for a given key.
 func (m *MockTransport) responderForKey(key string) Responder {
@@ -442,7 +444,7 @@ func DeactivateAndReset() {
 // Example:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
-// 			httpmock.DeactivateAndReset()
+// 			defer httpmock.DeactivateAndReset()
 //
 // 			httpmock.RegisterResponder("GET", "http://example.com/",
 // 				httpmock.NewStringResponder(200, "hello world"))
@@ -471,7 +473,7 @@ func RegisterResponder(method, url string, responder Responder) {
 // Example using a net/url.Values:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
-// 			httpmock.DeactivateAndReset()
+// 			defer httpmock.DeactivateAndReset()
 //
 // 			expectedQuery := net.Values{
 //				"a": []string{"3", "1", "8"},
@@ -488,7 +490,7 @@ func RegisterResponder(method, url string, responder Responder) {
 // or using a map[string]string:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
-// 			httpmock.DeactivateAndReset()
+// 			defer httpmock.DeactivateAndReset()
 //
 // 			expectedQuery := map[string]string{
 //				"a": "1",
@@ -503,7 +505,7 @@ func RegisterResponder(method, url string, responder Responder) {
 // or using a query string:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
-// 			httpmock.DeactivateAndReset()
+// 			defer httpmock.DeactivateAndReset()
 //
 // 			expectedQuery := "a=3&b=4&b=2&a=1&a=8"
 // 			httpmock.RegisterResponderWithQueryValues("GET", "http://example.com/", expectedQuery,
@@ -517,17 +519,13 @@ func RegisterResponderWithQuery(method, path string, query interface{}, responde
 	DefaultTransport.RegisterResponderWithQuery(method, path, query, responder)
 }
 
-// RegisterResponderWithQueryValues it is same as RegisterResponder, but doesn't depends on query objects order.
-//
-// Example:
-
 // RegisterNoResponder adds a mock that will be called whenever a request for an unregistered URL
 // is received.  The default behavior is to return a connection error.
 //
 // In some cases you may not want all URLs to be mocked, in which case you can do this:
 // 		func TestFetchArticles(t *testing.T) {
 // 			httpmock.Activate()
-// 			httpmock.DeactivateAndReset()
+// 			defer httpmock.DeactivateAndReset()
 //			httpmock.RegisterNoResponder(httpmock.InitialTransport.RoundTrip)
 //
 // 			// any requests that don't have a registered URL will be fetched normally

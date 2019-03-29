@@ -18,10 +18,21 @@ func TestEnv(t *testing.T) {
 		t.Fatal("expected not to be disabled")
 	}
 
+	client1 := &http.Client{Transport: &http.Transport{}}
+	client2 := &http.Client{Transport: &http.Transport{}}
+
 	// make sure an activation works
 	Activate()
+	ActivateNonDefault(client1)
+	ActivateNonDefault(client2)
 	if http.DefaultTransport != DefaultTransport {
 		t.Fatal("expected http.DefaultTransport to be our DefaultTransport")
+	}
+	if client1.Transport != DefaultTransport {
+		t.Fatal("expected client1.Transport to be our DefaultTransport")
+	}
+	if client2.Transport != DefaultTransport {
+		t.Fatal("expected client2.Transport to be our DefaultTransport")
 	}
 	Deactivate()
 
@@ -33,8 +44,16 @@ func TestEnv(t *testing.T) {
 
 	// make sure activation doesn't work
 	Activate()
+	ActivateNonDefault(client1)
+	ActivateNonDefault(client2)
 	if http.DefaultTransport == DefaultTransport {
 		t.Fatal("expected http.DefaultTransport to not be our DefaultTransport")
+	}
+	if client1.Transport == DefaultTransport {
+		t.Fatal("expected client1.Transport to not be our DefaultTransport")
+	}
+	if client2.Transport == DefaultTransport {
+		t.Fatal("expected client2.Transport to not be our DefaultTransport")
 	}
 	Deactivate()
 

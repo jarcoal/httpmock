@@ -2,6 +2,7 @@ package httpmock
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -357,36 +358,51 @@ func TestMockTransportRespectsCancel(t *testing.T) {
 	Activate()
 	defer DeactivateAndReset()
 
+	const (
+		cancelNone = iota
+		cancelReq
+		cancelCtx
+	)
+
 	cases := []struct {
-		withCancel   bool
+		withCancel   int
 		cancelNow    bool
 		withPanic    bool
 		expectedBody string
 		expectedErr  error
 	}{
 		// No cancel specified at all. Falls back to normal behavior
-		{false, false, false, "hello world", nil},
+		{cancelNone, false, false, "hello world", nil},
 
 		// Cancel returns error
-		{true, true, false, "", errors.New("request canceled")},
+		{cancelReq, true, false, "", errors.New("request canceled")},
+
+		// Cancel via context returns error
+		{cancelCtx, true, false, "", errors.New("context canceled")},
 
 		// Request can be cancelled but it is not cancelled.
-		{true, false, false, "hello world", nil},
+		{cancelReq, false, false, "hello world", nil},
+
+		// Request can be cancelled but it is not cancelled.
+		{cancelCtx, false, false, "hello world", nil},
 
 		// Panic in cancelled request is handled
-		{true, false, true, "", errors.New(`panic in responder: got "oh no"`)},
+		{cancelReq, false, true, "", errors.New(`panic in responder: got "oh no"`)},
+
+		// Panic in cancelled request is handled
+		{cancelCtx, false, true, "", errors.New(`panic in responder: got "oh no"`)},
 	}
 
 	for _, c := range cases {
 		Reset()
 		if c.withPanic {
 			RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
-				time.Sleep(time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 				panic("oh no")
 			})
 		} else {
 			RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
-				time.Sleep(time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 				return NewStringResponse(http.StatusOK, "hello world"), nil
 			})
 		}
@@ -395,18 +411,27 @@ func TestMockTransportRespectsCancel(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if c.withCancel {
+
+		switch c.withCancel {
+		case cancelReq:
 			cancel := make(chan struct{}, 1)
-			// TODO: replace req.Cancel by ctx
 			req.Cancel = cancel // nolint: staticcheck
 			if c.cancelNow {
 				cancel <- struct{}{}
+			}
+		case cancelCtx:
+			ctx, cancel := context.WithCancel(req.Context())
+			req = req.WithContext(ctx)
+			if c.cancelNow {
+				cancel()
+			} else {
+				defer cancel() // avoid ctx leak
 			}
 		}
 
 		resp, err := http.DefaultClient.Do(req)
 
-		// If we expect and error but none was returned, it's fatal for this test...
+		// If we expect an error but none was returned, it's fatal for this test...
 		if err == nil && c.expectedErr != nil {
 			t.Fatal("Error should not be nil")
 		}
@@ -438,7 +463,7 @@ func TestMockTransportRespectsTimeout(t *testing.T) {
 	RegisterResponder(
 		"GET", testURL,
 		func(r *http.Request) (*http.Response, error) {
-			time.Sleep(2 * timeout)
+			time.Sleep(100 * timeout)
 			return NewStringResponse(http.StatusOK, ""), nil
 		},
 	)

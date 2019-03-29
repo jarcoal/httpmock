@@ -201,7 +201,7 @@ import (
 var _ = Describe("Articles", func() {
 	It("returns a list of articles", func() {
 		fixture := `{"status":{"message": "Your message", "code": 200}}`
-		responder, err := httpmock.NewJsonResponder(200, fixture)
+		responder := httpmock.NewStringResponder(200, fixture)
 		fakeUrl := "https://api.mybiz.com/articles.json"
 		httpmock.RegisterResponder("GET", fakeUrl, responder)
 
