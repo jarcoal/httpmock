@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -45,6 +47,54 @@ func TestResponderFromResponse(t *testing.T) {
 		}
 	} else {
 		t.Error("response.Request should not be nil")
+	}
+}
+
+func TestNewNotFoundResponder(t *testing.T) {
+	var mesg string
+	responder := NewNotFoundResponder(func(args ...interface{}) {
+		mesg = fmt.Sprint(args[0])
+	})
+
+	req, err := http.NewRequest("GET", "http://foo.bar/path", nil)
+	if err != nil {
+		t.Fatal("Error creating request")
+	}
+
+	const title = "Responder not found for GET http://foo.bar/path"
+
+	resp, err := responder(req)
+	if resp != nil {
+		t.Error("resp should be nil")
+	}
+	if err == nil {
+		t.Error("err should be not nil")
+	} else if err.Error() != title {
+		t.Errorf(`err mismatch, got: "%s", expected: "%s"`,
+			err.Error(),
+			"Responder not found for: GET http://foo.bar/path")
+	}
+
+	if !strings.HasPrefix(mesg, title+"\nCalled from ") {
+		t.Error(`mesg should begin with "` + title + `\nCalled from ", but it is: "` + mesg + `"`)
+	}
+	if strings.HasSuffix(mesg, "\n") {
+		t.Error(`mesg should not end with \n, but it is: "` + mesg + `"`)
+	}
+
+	// nil fn
+	responder = NewNotFoundResponder(nil)
+
+	resp, err = responder(req)
+	if resp != nil {
+		t.Error("resp should be nil")
+	}
+	if err == nil {
+		t.Error("err should be not nil")
+	} else if err.Error() != title {
+		t.Errorf(`err mismatch, got: "%s", expected: "%s"`,
+			err.Error(),
+			"Responder not found for: GET http://foo.bar/path")
 	}
 }
 
