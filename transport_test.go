@@ -653,3 +653,102 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckStackTracer(t *testing.T) {
+	req, err := http.NewRequest("GET", "http://foo.bar/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// no error
+	gotErr := checkStackTracer(req, nil)
+	if gotErr != nil {
+		t.Errorf(`checkStackTracer(nil) should return nil, not %v`, gotErr)
+	}
+
+	// Classic error
+	err = errors.New("error")
+	gotErr = checkStackTracer(req, err)
+	if err != gotErr {
+		t.Errorf(`checkStackTracer(err) should return %v, not %v`, err, gotErr)
+	}
+
+	// stackTracer without customFn
+	origErr := errors.New("foo")
+	errTracer := stackTracer{
+		err: origErr,
+	}
+	gotErr = checkStackTracer(req, errTracer)
+	if gotErr != origErr {
+		t.Errorf(`Returned error mismatch, expected: %v, got: %v`, origErr, gotErr)
+	}
+
+	// stackTracer with nil error & without customFn
+	errTracer = stackTracer{}
+	gotErr = checkStackTracer(req, errTracer)
+	if gotErr != nil {
+		t.Errorf(`Returned error mismatch, expected: nil, got: %v`, gotErr)
+	}
+
+	// stackTracer
+	var mesg string
+	errTracer = stackTracer{
+		err: origErr,
+		customFn: func(args ...interface{}) {
+			mesg = args[0].(string)
+		},
+	}
+	gotErr = checkStackTracer(req, errTracer)
+	if !strings.HasPrefix(mesg, "foo\nCalled from ") || strings.HasSuffix(mesg, "\n") {
+		t.Errorf(`mesg does not match "^foo\nCalled from .*[^\n]\z", it is "` + mesg + `"`)
+	}
+	if gotErr != origErr {
+		t.Errorf(`Returned error mismatch, expected: %v, got: %v`, origErr, gotErr)
+	}
+
+	// stackTracer with nil error but customFn
+	mesg = ""
+	errTracer = stackTracer{
+		customFn: func(args ...interface{}) {
+			mesg = args[0].(string)
+		},
+	}
+	gotErr = checkStackTracer(req, errTracer)
+	if !strings.HasPrefix(mesg, "GET http://foo.bar/\nCalled from ") || strings.HasSuffix(mesg, "\n") {
+		t.Errorf(`mesg does not match "^foo\nCalled from .*[^\n]\z", it is "` + mesg + `"`)
+	}
+	if gotErr != nil {
+		t.Errorf(`Returned error mismatch, expected: nil, got: %v`, gotErr)
+	}
+
+	// Full test using Trace() Responder
+	Activate()
+	defer Deactivate()
+
+	const url = "https://foo.bar/"
+	mesg = ""
+	RegisterResponder("GET", url,
+		NewStringResponder(200, "{}").
+			Trace(func(args ...interface{}) { mesg = args[0].(string) }))
+
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(data) != "{}" {
+		t.FailNow()
+	}
+
+	// Check that first frame is the net/http.Get() call
+	if !strings.HasPrefix(mesg, "GET https://foo.bar/\nCalled from net/http.Get()\n    at ") ||
+		strings.HasSuffix(mesg, "\n") {
+		t.Errorf("Bad mesg: <%v>", mesg)
+	}
+}

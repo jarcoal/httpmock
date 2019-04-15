@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
 )
-
-// Responder is a callback that receives and http request and returns
-// a mocked response.
-type Responder func(*http.Request) (*http.Response, error)
 
 // NoResponderFound is returned when no responders are found for a given HTTP method and URL.
 var NoResponderFound = errors.New("no responder found") // nolint: golint
@@ -143,7 +140,8 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 func runCancelable(responder Responder, req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 	if req.Cancel == nil && ctx.Done() == nil { // nolint: staticcheck
-		return responder(req)
+		resp, err := responder(req)
+		return resp, checkStackTracer(req, err)
 	}
 
 	// Set up a goroutine that translates a close(req.Cancel) into a
@@ -197,7 +195,83 @@ func runCancelable(responder Responder, req *http.Request) (*http.Response, erro
 	// first goroutine.
 	done <- struct{}{}
 
-	return r.response, r.err
+	return r.response, checkStackTracer(req, r.err)
+}
+
+type stackTracer struct {
+	customFn func(...interface{})
+	err      error
+}
+
+func (n stackTracer) Error() string {
+	if n.err == nil {
+		return ""
+	}
+	return n.err.Error()
+}
+
+// checkStackTracer checks for specific error returned by
+// NewNotFoundResponder function or Debug Responder method.
+func checkStackTracer(req *http.Request, err error) error {
+	if nf, ok := err.(stackTracer); ok {
+		if nf.customFn != nil {
+			pc := make([]uintptr, 128)
+			npc := runtime.Callers(2, pc)
+			pc = pc[:npc]
+
+			var mesg bytes.Buffer
+			var netHTTPBegin, netHTTPEnd bool
+
+			// Start recording at first net/http call if any...
+			for {
+				frames := runtime.CallersFrames(pc)
+
+				var lastFn string
+				for {
+					frame, more := frames.Next()
+
+					if !netHTTPEnd {
+						if netHTTPBegin {
+							netHTTPEnd = !strings.HasPrefix(frame.Function, "net/http.")
+						} else {
+							netHTTPBegin = strings.HasPrefix(frame.Function, "net/http.")
+						}
+					}
+
+					if netHTTPEnd {
+						if lastFn != "" {
+							if mesg.Len() == 0 {
+								if nf.err != nil {
+									mesg.WriteString(nf.err.Error())
+								} else {
+									fmt.Fprintf(&mesg, "%s %s", req.Method, req.URL)
+								}
+								mesg.WriteString("\nCalled from ")
+							} else {
+								mesg.WriteString("\n  ")
+							}
+							fmt.Fprintf(&mesg, "%s()\n    at %s:%d", lastFn, frame.File, frame.Line)
+						}
+					}
+					lastFn = frame.Function
+
+					if !more {
+						break
+					}
+				}
+
+				// At least one net/http frame found
+				if mesg.Len() > 0 {
+					break
+				}
+				netHTTPEnd = true // retry without looking at net/http frames
+			}
+
+			nf.customFn(mesg.String())
+		}
+		err = nf.err
+	}
+	return err
 }
 
 // responderForKey returns a responder for a given key.

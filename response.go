@@ -4,14 +4,72 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"runtime"
 	"strconv"
 	"strings"
 )
+
+// Responder is a callback that receives and http request and returns
+// a mocked response.
+type Responder func(*http.Request) (*http.Response, error)
+
+func (r Responder) times(name string, n int, fn ...func(...interface{})) Responder {
+	count := 0
+	return func(req *http.Request) (*http.Response, error) {
+		count++
+		if count > n {
+			err := stackTracer{
+				err: fmt.Errorf("Responder not found for %s %s (coz %s and already called %d times)", req.Method, req.URL, name, count),
+			}
+			if len(fn) > 0 {
+				err.customFn = fn[0]
+			}
+			return nil, err
+		}
+		return r(req)
+	}
+}
+
+// Times returns a Responder callable n times before returning an
+// error. If the Responder is called more than n times and fn is
+// passed and non-nil, it acts as the fn parameter of
+// NewNotFoundResponder, allowing to dump the stack trace to localize
+// the origin of the call.
+func (r Responder) Times(n int, fn ...func(...interface{})) Responder {
+	return r.times("Times", n, fn...)
+}
+
+// Once returns a new Responder callable once before returning an
+// error. If the Responder is called 2 or more times and fn is passed
+// and non-nil, it acts as the fn parameter of NewNotFoundResponder,
+// allowing to dump the stack trace to localize the origin of the
+// call.
+func (r Responder) Once(fn ...func(...interface{})) Responder {
+	return r.times("Once", 1, fn...)
+}
+
+// Trace returns a new Responder that allow to easily trace the calls
+// of the original Responder using fn. It can be used in conjunction
+// with the testing package as in the example below with the help of
+// (*testing.T).Log method:
+//   import "testing"
+//   ...
+//   func TestMyApp(t *testing.T) {
+//   	...
+//   	httpmock.RegisterResponder("GET", "/foo/bar",
+//    	httpmock.NewStringResponder(200, "{}").Trace(t.Log),
+//   	)
+func (r Responder) Trace(fn func(...interface{})) Responder {
+	return func(req *http.Request) (*http.Response, error) {
+		resp, err := r(req)
+		return resp, stackTracer{
+			customFn: fn,
+			err:      err,
+		}
+	}
+}
 
 // ResponderFromResponse wraps an *http.Response in a Responder
 func ResponderFromResponse(resp *http.Response) Responder {
@@ -54,43 +112,18 @@ func NewErrorResponder(err error) Responder {
 //   	httpmock.RegisterNoResponder(httpmock.NewNotFoundResponder(t.Fatal))
 //
 // Will abort the current test and print something like:
-//   response:69: Responder not found for: GET http://foo.bar/path
-//       Called from goroutine 20 [running]:
-//         github.com/jarcoal/httpmock.NewNotFoundResponder.func1(0xc00011f000, 0x0, 0x42dfb1, 0x77ece8)
-//           /go/src/github.com/jarcoal/httpmock/response.go:67 +0x1c1
-//         github.com/jarcoal/httpmock.runCancelable(0xc00004bfc0, 0xc00011f000, 0x7692f8, 0xc, 0xc0001208b0)
-//           /go/src/github.com/jarcoal/httpmock/transport.go:146 +0x7e
-//         github.com/jarcoal/httpmock.(*MockTransport).RoundTrip(0xc00005c980, 0xc00011f000, 0xc00005c980, 0x0, 0x0)
-//           /go/src/github.com/jarcoal/httpmock/transport.go:140 +0x19d
-//         net/http.send(0xc00011f000, 0x7d3440, 0xc00005c980, 0x0, 0x0, 0x0, 0xc000010400, 0xc000047bd8, 0x1, 0x0)
-//           /usr/local/go/src/net/http/client.go:250 +0x461
-//         net/http.(*Client).send(0x9f6e20, 0xc00011f000, 0x0, 0x0, 0x0, 0xc000010400, 0x0, 0x1, 0x9f7ac0)
-//         	 /usr/local/go/src/net/http/client.go:174 +0xfb
-//         net/http.(*Client).do(0x9f6e20, 0xc00011f000, 0x0, 0x0, 0x0)
-//         	 /usr/local/go/src/net/http/client.go:641 +0x279
-//         net/http.(*Client).Do(...)
-//         	 /usr/local/go/src/net/http/client.go:509
-//         net/http.(*Client).Get(0x9f6e20, 0xc00001e420, 0x23, 0xc00012c000, 0xb, 0x600)
-//         	 /usr/local/go/src/net/http/client.go:398 +0x9e
-//         net/http.Get(...)
-//         	 /usr/local/go/src/net/http/client.go:370
-//         foo.bar/foobar/foobar.TestMyApp(0xc00011e000)
-//         	 /go/src/foo.bar/foobar/foobar/my_app_test.go:272 +0xdbb
-//         testing.tRunner(0xc00011e000, 0x77e3a8)
-//         	 /usr/local/go/src/testing/testing.go:865 +0xc0
-//         created by testing.(*T).Run
-//         	 /usr/local/go/src/testing/testing.go:916 +0x35a
+//   transport_test.go:735: Called from net/http.Get()
+//         at /go/src/github.com/jarcoal/httpmock/transport_test.go:714
+//       github.com/jarcoal/httpmock.TestCheckStackTracer()
+//         at /go/src/testing/testing.go:865
+//       testing.tRunner()
+//         at /go/src/runtime/asm_amd64.s:1337
 func NewNotFoundResponder(fn func(...interface{})) Responder {
 	return func(req *http.Request) (*http.Response, error) {
-		mesg := fmt.Sprintf("Responder not found for %s %s", req.Method, req.URL)
-		if fn != nil {
-			buf := make([]byte, 4096)
-			n := runtime.Stack(buf, false)
-			buf = buf[:n]
-			fn(mesg + "\nCalled from " +
-				strings.Replace(strings.TrimSuffix(string(buf), "\n"), "\n", "\n  ", -1))
+		return nil, stackTracer{
+			customFn: fn,
+			err:      fmt.Errorf("Responder not found for %s %s", req.Method, req.URL),
 		}
-		return nil, errors.New(mesg)
 	}
 }
 
