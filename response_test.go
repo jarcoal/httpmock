@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"testing"
 )
 
@@ -51,10 +49,7 @@ func TestResponderFromResponse(t *testing.T) {
 }
 
 func TestNewNotFoundResponder(t *testing.T) {
-	var mesg string
-	responder := NewNotFoundResponder(func(args ...interface{}) {
-		mesg = fmt.Sprint(args[0])
-	})
+	responder := NewNotFoundResponder(func(args ...interface{}) {})
 
 	req, err := http.NewRequest("GET", "http://foo.bar/path", nil)
 	if err != nil {
@@ -71,15 +66,11 @@ func TestNewNotFoundResponder(t *testing.T) {
 		t.Error("err should be not nil")
 	} else if err.Error() != title {
 		t.Errorf(`err mismatch, got: "%s", expected: "%s"`,
-			err.Error(),
-			"Responder not found for: GET http://foo.bar/path")
-	}
-
-	if !strings.HasPrefix(mesg, title+"\nCalled from ") {
-		t.Error(`mesg should begin with "` + title + `\nCalled from ", but it is: "` + mesg + `"`)
-	}
-	if strings.HasSuffix(mesg, "\n") {
-		t.Error(`mesg should not end with \n, but it is: "` + mesg + `"`)
+			err, "Responder not found for: GET http://foo.bar/path")
+	} else if ne, ok := err.(stackTracer); !ok {
+		t.Errorf(`err type mismatch, got %T, expected httpmock.notFound`, err)
+	} else if ne.customFn == nil {
+		t.Error(`err customFn mismatch, got: nil, expected: non-nil`)
 	}
 
 	// nil fn
@@ -93,8 +84,11 @@ func TestNewNotFoundResponder(t *testing.T) {
 		t.Error("err should be not nil")
 	} else if err.Error() != title {
 		t.Errorf(`err mismatch, got: "%s", expected: "%s"`,
-			err.Error(),
-			"Responder not found for: GET http://foo.bar/path")
+			err, "Responder not found for: GET http://foo.bar/path")
+	} else if ne, ok := err.(stackTracer); !ok {
+		t.Errorf(`err type mismatch, got %T, expected httpmock.notFound`, err)
+	} else if ne.customFn != nil {
+		t.Errorf(`err customFn mismatch, got: %p, expected: nil`, ne.customFn)
 	}
 }
 
@@ -251,4 +245,99 @@ func TestRewindResponse(t *testing.T) {
 			t.FailNow()
 		}
 	}
+}
+
+func TestResponder(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, "http://foo.bar", nil)
+	if err != nil {
+		t.Fatal("Error creating request")
+	}
+	resp := &http.Response{}
+
+	chk := func(r Responder, expectedResp *http.Response, expectedErr string) {
+		//t.Helper // Only available since 1.9
+		gotResp, gotErr := r(req)
+		if gotResp != expectedResp {
+			t.Errorf(`Response mismatch, expected: %v, got: %v`, expectedResp, gotResp)
+		}
+		var gotErrStr string
+		if gotErr != nil {
+			gotErrStr = gotErr.Error()
+		}
+		if gotErrStr != expectedErr {
+			t.Errorf(`Error mismatch, expected: %v, got: %v`, expectedErr, gotErrStr)
+		}
+	}
+	called := false
+	chkNotCalled := func() {
+		if called {
+			//t.Helper // Only available since 1.9
+			t.Errorf("Original responder should not be called")
+			called = false
+		}
+	}
+	chkCalled := func() {
+		if !called {
+			//t.Helper // Only available since 1.9
+			t.Errorf("Original responder should be called")
+		}
+		called = false
+	}
+
+	r := Responder(func(*http.Request) (*http.Response, error) {
+		called = true
+		return resp, nil
+	})
+	chk(r, resp, "")
+	chkCalled()
+
+	//
+	// Once
+	ro := r.Once()
+	chk(ro, resp, "")
+	chkCalled()
+
+	chk(ro, nil, "Responder not found for GET http://foo.bar (coz Once and already called 2 times)")
+	chkNotCalled()
+
+	chk(ro, nil, "Responder not found for GET http://foo.bar (coz Once and already called 3 times)")
+	chkNotCalled()
+
+	ro = r.Once(func(args ...interface{}) {})
+	chk(ro, resp, "")
+	chkCalled()
+
+	chk(ro, nil, "Responder not found for GET http://foo.bar (coz Once and already called 2 times)")
+	chkNotCalled()
+
+	//
+	// Times
+	rt := r.Times(2)
+	chk(rt, resp, "")
+	chkCalled()
+
+	chk(rt, resp, "")
+	chkCalled()
+
+	chk(rt, nil, "Responder not found for GET http://foo.bar (coz Times and already called 3 times)")
+	chkNotCalled()
+
+	chk(rt, nil, "Responder not found for GET http://foo.bar (coz Times and already called 4 times)")
+	chkNotCalled()
+
+	rt = r.Times(1, func(args ...interface{}) {})
+	chk(rt, resp, "")
+	chkCalled()
+
+	chk(rt, nil, "Responder not found for GET http://foo.bar (coz Times and already called 2 times)")
+	chkNotCalled()
+
+	//
+	// Trace
+	rt = r.Trace(func(args ...interface{}) {})
+	chk(rt, resp, "")
+	chkCalled()
+
+	chk(rt, resp, "")
+	chkCalled()
 }
