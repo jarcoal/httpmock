@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,18 @@ func assertBody(t *testing.T, resp *http.Response, expected string) {
 
 	if got != expected {
 		t.Errorf("Expected body: %#v, got %#v", expected, got)
+	}
+}
+
+func TestRouteKey(t *testing.T) {
+	got, expected := noResponder.String(), "NO_RESPONDER"
+	if got != expected {
+		t.Errorf("got: %v, expected: %v", got, expected)
+	}
+
+	got, expected = routeKey{Method: "GET", URL: "/foo"}.String(), "GET /foo"
+	if got != expected {
+		t.Errorf("got: %v, expected: %v", got, expected)
 	}
 }
 
@@ -95,7 +108,7 @@ func TestMockTransportDefaultMethod(t *testing.T) {
 	Activate()
 	defer Deactivate()
 
-	urlString := "https://github.com/"
+	const urlString = "https://github.com/"
 	url, err := url.Parse(urlString)
 	if err != nil {
 		t.Fatal(err)
@@ -208,77 +221,157 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 	// Just in case a panic occurs
 	defer DeactivateAndReset()
 
-	for responder, paths := range map[string][]string{
-		// unsorted query string matches exactly
-		"/hello/world?query=string&abc=zz#fragment": {
-			testURL + "hello/world?query=string&abc=zz#fragment",
+	for _, test := range []struct {
+		Responder string
+		Paths     []string
+	}{
+		{
+			// unsorted query string matches exactly
+			Responder: "/hello/world?query=string&abc=zz#fragment",
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+			},
+		},
+		{
+			// sorted query string matches all cases
+			Responder: "/hello/world?abc=zz&query=string#fragment",
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?abc=zz&query=string#fragment",
+			},
+		},
+		{
+			// unsorted query string matches exactly
+			Responder: "/hello/world?query=string&abc=zz",
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz",
+			},
+		},
+		{
+			// sorted query string matches all cases
+			Responder: "/hello/world?abc=zz&query=string",
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world?abc=zz&query=string",
+			},
+		},
+		{
+			// unsorted query string matches exactly
+			Responder: "/hello/world?query=string&query=string2&abc=zz",
+			Paths: []string{
+				testURL + "hello/world?query=string&query=string2&abc=zz",
+			},
 		},
 		// sorted query string matches all cases
-		"/hello/world?abc=zz&query=string#fragment": {
-			testURL + "hello/world?query=string&abc=zz#fragment",
-			testURL + "hello/world?abc=zz&query=string#fragment",
+		{
+			Responder: "/hello/world?abc=zz&query=string&query=string2",
+			Paths: []string{
+				testURL + "hello/world?query=string&query=string2&abc=zz",
+				testURL + "hello/world?query=string2&query=string&abc=zz",
+				testURL + "hello/world?abc=zz&query=string2&query=string",
+			},
 		},
-		// unsorted query string matches exactly
-		"/hello/world?query=string&abc=zz": {
-			testURL + "hello/world?query=string&abc=zz",
+		{
+			Responder: "/hello/world?query",
+			Paths: []string{
+				testURL + "hello/world?query",
+			},
 		},
-		// sorted query string matches all cases
-		"/hello/world?abc=zz&query=string": {
-			testURL + "hello/world?query=string&abc=zz",
-			testURL + "hello/world?abc=zz&query=string",
+		{
+			Responder: "/hello/world?query&abc",
+			Paths: []string{
+				testURL + "hello/world?query&abc",
+				// testURL + "hello/world?abc&query" won' work as "=" is needed, see below
+			},
 		},
-		// unsorted query string matches exactly
-		"/hello/world?query=string&query=string2&abc=zz": {
-			testURL + "hello/world?query=string&query=string2&abc=zz",
+		{
+			// In case the sorting does not matter for received params without
+			// values, we must register params with "="
+			Responder: "/hello/world?abc=&query=",
+			Paths: []string{
+				testURL + "hello/world?query&abc",
+				testURL + "hello/world?abc&query",
+			},
 		},
-		// sorted query string matches all cases
-		"/hello/world?abc=zz&query=string&query=string2": {
-			testURL + "hello/world?query=string&query=string2&abc=zz",
-			testURL + "hello/world?query=string2&query=string&abc=zz",
-			testURL + "hello/world?abc=zz&query=string2&query=string",
+		{
+			Responder: "/hello/world#fragment",
+			Paths: []string{
+				testURL + "hello/world#fragment",
+			},
 		},
-		"/hello/world?query": {
-			testURL + "hello/world?query",
+		{
+			Responder: "/hello/world",
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world#fragment",
+				testURL + "hello/world",
+			},
 		},
-		"/hello/world?query&abc": {
-			testURL + "hello/world?query&abc",
-			// testURL + "hello/world?abc&query" won' work as "=" is needed, see below
+		// Regexp cases
+		{
+			Responder: `=~^http://.*/hello/.*ld\z`,
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world#fragment",
+				testURL + "hello/world",
+			},
 		},
-		// In case the sorting does not matter for received params without
-		// values, we must register params with "="
-		"/hello/world?abc=&query=": {
-			testURL + "hello/world?query&abc",
-			testURL + "hello/world?abc&query",
+		{
+			Responder: `=~^http://.*/hello/.*ld(\z|[?#])`,
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world#fragment",
+				testURL + "hello/world",
+			},
 		},
-		"/hello/world#fragment": {
-			testURL + "hello/world#fragment",
+		{
+			Responder: `=~^/hello/.*ld\z`,
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world#fragment",
+				testURL + "hello/world",
+			},
 		},
-		"/hello/world": {
-			testURL + "hello/world?query=string&abc=zz#fragment",
-			testURL + "hello/world?query=string&abc=zz",
-			testURL + "hello/world#fragment",
-			testURL + "hello/world",
+		{
+			Responder: `=~^/hello/.*ld(\z|[?#])`,
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world#fragment",
+				testURL + "hello/world",
+			},
+		},
+		{
+			Responder: `=~abc=zz`,
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+			},
 		},
 	} {
 		Activate()
 
 		// register the responder
-		RegisterResponder("GET", responder, NewStringResponder(200, "hello world"))
+		RegisterResponder("GET", test.Responder, NewStringResponder(200, "hello world"))
 
-		for _, reqURL := range paths {
+		for _, reqURL := range test.Paths {
 			// make a request for the testURL with a querystring
 			resp, err := http.Get(reqURL)
 			if err != nil {
-				t.Fatalf("%s: expected request %s to succeed", responder, reqURL)
+				t.Fatalf("%s: expected request %s to succeed", test.Responder, reqURL)
 			}
 
 			data, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				t.Fatalf("%s: %s error: %s", responder, reqURL, err)
+				t.Fatalf("%s: %s error: %s", test.Responder, reqURL, err)
 			}
 
 			if string(data) != "hello world" {
-				t.Fatalf("%s: expected body of %s to be 'hello world'", responder, reqURL)
+				t.Fatalf("%s: expected body of %s to be 'hello world'", test.Responder, reqURL)
 			}
 		}
 
@@ -479,11 +572,13 @@ func TestMockTransportCallCount(t *testing.T) {
 	Activate()
 	defer Deactivate()
 
-	url := "https://github.com/"
-	url2 := "https://gitlab.com/"
+	const (
+		url  = "https://github.com/path?b=1&a=2"
+		url2 = "https://gitlab.com/"
+	)
 
 	RegisterResponder("GET", url, NewStringResponder(200, "body"))
-	RegisterResponder("POST", url2, NewStringResponder(200, "body"))
+	RegisterResponder("POST", "=~gitlab", NewStringResponder(200, "body"))
 
 	_, err := http.Get(url)
 	if err != nil {
@@ -492,14 +587,14 @@ func TestMockTransportCallCount(t *testing.T) {
 
 	buff := new(bytes.Buffer)
 	json.NewEncoder(buff).Encode("{}") // nolint: errcheck
-	_, err1 := http.Post(url2, "application/json", buff)
-	if err1 != nil {
-		t.Fatal(err1)
+	_, err = http.Post(url2, "application/json", buff)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	_, err2 := http.Get(url)
-	if err2 != nil {
-		t.Fatal(err2)
+	_, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	totalCallCount := GetTotalCallCount()
@@ -508,11 +603,12 @@ func TestMockTransportCallCount(t *testing.T) {
 	}
 
 	info := GetCallCountInfo()
-	expectedInfo := map[string]int{}
-	urlCallkey := "GET " + url
-	url2Callkey := "POST " + url2
-	expectedInfo[urlCallkey] = 2
-	expectedInfo[url2Callkey] = 1
+	expectedInfo := map[string]int{
+		"GET " + url: 2,
+		// Regexp match generates 2 entries:
+		"POST " + url2:  1, // the matched call
+		"POST =~gitlab": 1, // the regexp responder
+	}
 
 	if !reflect.DeepEqual(info, expectedInfo) {
 		t.Fatalf("did not correctly track the call count info. expected it to be \n %+v \n but it was \n %+v \n", expectedInfo, info)
@@ -524,7 +620,6 @@ func TestMockTransportCallCount(t *testing.T) {
 	if afterResetTotalCallCount != 0 {
 		t.Fatalf("did not reset the total count of calls correctly. expected it to be 0 after reset, but it was %v", afterResetTotalCallCount)
 	}
-
 }
 
 func TestRegisterResponderWithQuery(t *testing.T) {
@@ -576,6 +671,7 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 				},
 				"a=1&b=2&a=3&c&b=4&a=2",
 				"b=2&a=1&c=&b=4&a=2&a=3",
+				nil,
 			},
 			URLs: []string{
 				testURLPath + "?a=1&b=2&a=3&c&b=4&a=2",
@@ -617,16 +713,24 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 	resp := NewStringResponder(200, "hello world!")
 
 	for _, test := range []struct {
+		Path        string
 		Query       interface{}
 		PanicPrefix string
 	}{
 		{
+			Path:        "foobar",
 			Query:       "%",
 			PanicPrefix: "RegisterResponderWithQuery bad query string: ",
 		},
 		{
+			Path:        "foobar",
 			Query:       1234,
 			PanicPrefix: "RegisterResponderWithQuery bad query type int. Only url.Values, map[string]string and string are allowed",
+		},
+		{
+			Path:        `=~regexp.*\z`,
+			Query:       "",
+			PanicPrefix: `path begins with "=~", RegisterResponder should be used instead of RegisterResponderWithQuery`,
 		},
 	} {
 		var (
@@ -638,7 +742,7 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 				panicVal = recover()
 			}()
 
-			RegisterResponderWithQuery("GET", "foobar", test.Query, resp)
+			RegisterResponderWithQuery("GET", test.Path, test.Query, resp)
 			didntPanic = true
 		}()
 
@@ -651,6 +755,31 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 			t.Fatalf(`RegisterResponderWithQuery + query=%v panic="%v" expected prefix="%v"`,
 				test.Query, panicVal, test.PanicPrefix)
 		}
+	}
+}
+
+func TestRegisterRegexpResponder(t *testing.T) {
+	Activate()
+	defer DeactivateAndReset()
+
+	rx := regexp.MustCompile("ex.mple")
+
+	RegisterRegexpResponder("GET", rx, NewStringResponder(200, "first"))
+	// Overwrite responder
+	RegisterRegexpResponder("GET", rx, NewStringResponder(200, "second"))
+
+	resp, err := http.Get(testURL)
+	if err != nil {
+		t.Fatalf("expected request %s to succeed", testURL)
+	}
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("%s error: %s", testURL, err)
+	}
+
+	if string(data) != "second" {
+		t.Fatalf("expected body of %s to be 'hello world'", testURL)
 	}
 }
 

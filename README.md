@@ -68,17 +68,25 @@ func TestFetchArticles(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
+	// Exact URL match
+	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles",
 		httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
+
+	// Regexp match (could use httpmock.RegisterRegexpResponder instead)
+	httpmock.RegisterResponder("GET", `=~^https://api.mybiz.com/articles/id/\d+\z`,
+		httpmock.NewStringResponder(200, `{"id": 1, "name": "My Great Article"}`))
+
+	// do stuff that makes a request to articles
+	...
 
 	// get count info
 	httpmock.GetTotalCallCount()
 
 	// get the amount of calls for the registered responder
 	info := httpmock.GetCallCountInfo()
-	info["GET https://api.mybiz.com/articles.json"] // number of GET calls made to https://api.mybiz.com/articles.json
-
-	// do stuff that makes a request to articles.json
+	info["GET https://api.mybiz.com/articles"] // number of GET calls made to https://api.mybiz.com/articles
+	info["GET https://api.mybiz.com/articles/id/12"] // number of GET calls made to https://api.mybiz.com/articles/id/12
+	info[`GET =~^https://api.mybiz.com/articles/id/\d+\z`] // number of GET calls made to https://api.mybiz.com/articles/id/<any-number>
 }
 ```
 
@@ -92,7 +100,7 @@ func TestFetchArticles(t *testing.T) {
 	articles := make([]map[string]interface{}, 0)
 
 	// mock to list out the articles
-	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
+	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles",
 		func(req *http.Request) (*http.Response, error) {
 			resp, err := httpmock.NewJsonResponse(200, articles)
 			if err != nil {
@@ -103,7 +111,7 @@ func TestFetchArticles(t *testing.T) {
 	)
 
 	// mock to add a new article
-	httpmock.RegisterResponder("POST", "https://api.mybiz.com/articles.json",
+	httpmock.RegisterResponder("POST", "https://api.mybiz.com/articles",
 		func(req *http.Request) (*http.Response, error) {
 			article := make(map[string]interface{})
 			if err := json.NewDecoder(req.Body).Decode(&article); err != nil {
@@ -123,6 +131,23 @@ func TestFetchArticles(t *testing.T) {
 	// do stuff that adds and checks articles
 }
 ```
+
+### Algorithm
+
+When `GET http://example.tld/some/path?b=12&a=foo&a=bar` request is
+caught, all standard responders are checked against the following URL
+or paths, the first match stops the search:
+
+1. `http://example.tld/some/path?b=12&a=foo&a=bar` (original URL)
+1. `http://example.tld/some/path?a=bar&a=foo&b=12` (sorted query params)
+1. `http://example.tld/some/path` (without query params)
+1. `/some/path?b=12&a=foo&a=bar` (original URL without scheme and host)
+1. `/some/path?a=bar&a=foo&b=12` (same, but sorted query params)
+1. `/some/path` (path only)
+
+If no standard responder matched, the regexp responders are checked,
+in the same order, the first match stops the search.
+
 
 ### [Ginkgo](https://onsi.github.io/ginkgo/) Example:
 ```go
