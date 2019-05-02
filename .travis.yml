@@ -32,7 +32,7 @@ script:
   - go test -race -covermode=atomic -coverprofile=coverage.out ./...
   - >
     if [ "$USE_LINTER" = 1 ]; then
-      golangci-lint run -E gofmt -E golint -E maligned -E prealloc -E unconvert ./...;
+      golangci-lint run -E gofmt -E golint -E maligned -E misspell -E prealloc -E unconvert ./...;
     fi
 
 notifications:
