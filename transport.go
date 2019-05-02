@@ -2,6 +2,7 @@ package httpmock
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -77,19 +79,22 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		method = http.MethodGet
 	}
 
-	var responder Responder
-	var respKey routeKey
+	var (
+		responder  Responder
+		respKey    routeKey
+		submatches []string
+	)
 	key := routeKey{
 		Method: method,
 	}
-	for _, getResponder := range []func(routeKey) (Responder, routeKey){
+	for _, getResponder := range []func(routeKey) (Responder, routeKey, []string){
 		m.responderForKey,       // Exact match
 		m.regexpResponderForKey, // Regexp match
 	} {
 		// try and get a responder that matches the method and URL with
 		// query params untouched: http://z.tld/path?q...
 		key.URL = url
-		responder, respKey = getResponder(key)
+		responder, respKey, submatches = getResponder(key)
 		if responder != nil {
 			break
 		}
@@ -101,7 +106,7 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			// Replace unsorted query params by sorted ones:
 			//   http://z.tld/path?sorted_q...
 			key.URL = strings.Replace(url, req.URL.RawQuery, query, 1)
-			responder, respKey = getResponder(key)
+			responder, respKey, submatches = getResponder(key)
 			if responder != nil {
 				break
 			}
@@ -122,7 +127,7 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// querystring and try again: http://z.tld/path
 		if hasQueryString {
 			key.URL = surl
-			responder, respKey = getResponder(key)
+			responder, respKey, submatches = getResponder(key)
 			if responder != nil {
 				break
 			}
@@ -135,7 +140,7 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// First with unsorted querystring: /path?q...
 		if hasQueryString {
 			key.URL = pathAlone + strings.TrimPrefix(url, surl) // concat after-path part
-			responder, respKey = getResponder(key)
+			responder, respKey, submatches = getResponder(key)
 			if responder != nil {
 				break
 			}
@@ -145,7 +150,7 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			if req.URL.Fragment != "" {
 				key.URL += "#" + req.URL.Fragment
 			}
-			responder, respKey = getResponder(key)
+			responder, respKey, submatches = getResponder(key)
 			if responder != nil {
 				break
 			}
@@ -153,7 +158,7 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		// Then using path alone: /path
 		key.URL = pathAlone
-		responder, respKey = getResponder(key)
+		responder, respKey, submatches = getResponder(key)
 		if responder != nil {
 			break
 		}
@@ -180,7 +185,7 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if responder == nil {
 		return ConnectionFailure(req)
 	}
-	return runCancelable(responder, req)
+	return runCancelable(responder, setSubmatches(req, submatches))
 }
 
 func runCancelable(responder Responder, req *http.Request) (*http.Response, error) {
@@ -321,25 +326,32 @@ func checkStackTracer(req *http.Request, err error) error {
 }
 
 // responderForKey returns a responder for a given key.
-func (m *MockTransport) responderForKey(key routeKey) (Responder, routeKey) {
+func (m *MockTransport) responderForKey(key routeKey) (Responder, routeKey, []string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.responders[key], key
+	return m.responders[key], key, nil
 }
 
 // responderForKeyUsingRegexp returns the first responder matching a given key using regexps.
-func (m *MockTransport) regexpResponderForKey(key routeKey) (Responder, routeKey) {
+func (m *MockTransport) regexpResponderForKey(key routeKey) (Responder, routeKey, []string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for _, regInfo := range m.regexpResponders {
-		if regInfo.method == key.Method && regInfo.rx.MatchString(key.URL) {
-			return regInfo.responder, routeKey{
-				Method: key.Method,
-				URL:    regInfo.origRx,
+		if regInfo.method == key.Method {
+			if sm := regInfo.rx.FindStringSubmatch(key.URL); sm != nil {
+				if len(sm) == 1 {
+					sm = nil
+				} else {
+					sm = sm[1:]
+				}
+				return regInfo.responder, routeKey{
+					Method: key.Method,
+					URL:    regInfo.origRx,
+				}, sm
 			}
 		}
 	}
-	return nil, key
+	return nil, key, nil
 }
 
 func isRegexpURL(url string) bool {
@@ -383,9 +395,9 @@ func isRegexpURL(url string) bool {
 // 			httpmock.RegisterResponder("GET", `=~^/item/id/\d+\z`,
 // 				httpmock.NewStringResponder("any item get", 200))
 //
-//			// requests to http://example.com/ will now return "hello world" and
-//			// requests to any host with path /path/only will return "any host hello world"
-//			// requests to any host with path matching ^/item/id/\d+\z regular expression will return "any item get"
+// 			// requests to http://example.com/ will now return "hello world" and
+// 			// requests to any host with path /path/only will return "any host hello world"
+// 			// requests to any host with path matching ^/item/id/\d+\z regular expression will return "any item get"
 // 		}
 func (m *MockTransport) RegisterResponder(method, url string, responder Responder) {
 	if isRegexpURL(url) {
@@ -748,9 +760,9 @@ func DeactivateAndReset() {
 // 			httpmock.RegisterResponder("GET", `=~^/item/id/\d+\z`,
 // 				httpmock.NewStringResponder("any item get", 200))
 //
-//			// requests to http://example.com/ will now return "hello world" and
-//			// requests to any host with path /path/only will return "any host hello world"
-//			// requests to any host with path matching ^/item/id/\d+\z regular expression will return "any item get"
+// 			// requests to http://example.com/ will now return "hello world" and
+// 			// requests to any host with path /path/only will return "any host hello world"
+// 			// requests to any host with path matching ^/item/id/\d+\z regular expression will return "any item get"
 // 		}
 func RegisterResponder(method, url string, responder Responder) {
 	DefaultTransport.RegisterResponder(method, url, responder)
@@ -793,7 +805,7 @@ func RegisterRegexpResponder(method string, urlRegexp *regexp.Regexp, responder 
 // 			defer httpmock.DeactivateAndReset()
 //
 // 			expectedQuery := net.Values{
-//				"a": []string{"3", "1", "8"},
+// 				"a": []string{"3", "1", "8"},
 //				"b": []string{"4", "2"},
 //			}
 // 			httpmock.RegisterResponderWithQueryValues("GET", "http://example.com/", expectedQuery,
@@ -849,4 +861,225 @@ func RegisterResponderWithQuery(method, path string, query interface{}, responde
 // 		}
 func RegisterNoResponder(responder Responder) {
 	DefaultTransport.RegisterNoResponder(responder)
+}
+
+type submatchesKeyType struct{}
+
+var submatchesKey submatchesKeyType
+
+func setSubmatches(req *http.Request, submatches []string) *http.Request {
+	if len(submatches) > 0 {
+		return req.WithContext(context.WithValue(req.Context(), submatchesKey, submatches))
+	}
+	return req
+}
+
+// ErrSubmatchNotFound is the error returned by GetSubmatch* functions
+// when the given submatch index cannot be found.
+var ErrSubmatchNotFound = errors.New("submatch not found")
+
+// GetSubmatch has to be used in Responders installed by
+// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
+// allows to retrieve the n-th submatch of the matching regexp, as a
+// string. Example:
+// 	RegisterResponder("GET", `=~^/item/name/([^/]+)\z`,
+// 		func(req *http.Request) (*http.Response, error) {
+// 			name, err := GetSubmatch(req, 1) // 1=first regexp submatch
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			return NewJsonResponse(200, map[string]interface{}{
+// 				"id":   123,
+// 				"name": name,
+// 			})
+// 		})
+//
+// It panics if n < 1. See MustGetSubmatch to avoid testing the
+// returned error.
+func GetSubmatch(req *http.Request, n int) (string, error) {
+	if n <= 0 {
+		panic(fmt.Sprintf("getting submatches starts at 1, not %d", n))
+	}
+	n--
+
+	submatches, ok := req.Context().Value(submatchesKey).([]string)
+	if !ok || n >= len(submatches) {
+		return "", ErrSubmatchNotFound
+	}
+	return submatches[n], nil
+}
+
+// GetSubmatchAsInt has to be used in Responders installed by
+// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
+// allows to retrieve the n-th submatch of the matching regexp, as an
+// int64. Example:
+// 	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
+// 		func(req *http.Request) (*http.Response, error) {
+// 			id, err := GetSubmatchAsInt(req, 1) // 1=first regexp submatch
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			return NewJsonResponse(200, map[string]interface{}{
+// 				"id":   id,
+// 				"name": "The beautiful name",
+// 			})
+// 		})
+//
+// It panics if n < 1. See MustGetSubmatchAsInt to avoid testing the
+// returned error.
+func GetSubmatchAsInt(req *http.Request, n int) (int64, error) {
+	sm, err := GetSubmatch(req, n)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(sm, 10, 64)
+}
+
+// GetSubmatchAsUint has to be used in Responders installed by
+// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
+// allows to retrieve the n-th submatch of the matching regexp, as a
+// uint64. Example:
+// 	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
+// 		func(req *http.Request) (*http.Response, error) {
+// 			id, err := GetSubmatchAsUint(req, 1) // 1=first regexp submatch
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			return NewJsonResponse(200, map[string]interface{}{
+// 				"id":   id,
+// 				"name": "The beautiful name",
+// 			})
+// 		})
+//
+// It panics if n < 1. See MustGetSubmatchAsUint to avoid testing the
+// returned error.
+func GetSubmatchAsUint(req *http.Request, n int) (uint64, error) {
+	sm, err := GetSubmatch(req, n)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseUint(sm, 10, 64)
+}
+
+// GetSubmatchAsFloat has to be used in Responders installed by
+// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
+// allows to retrieve the n-th submatch of the matching regexp, as a
+// float64. Example:
+// 	RegisterResponder("PATCH", `=~^/item/id/\d+\?height=(\d+(?:\.\d*)?)\z`,
+// 		func(req *http.Request) (*http.Response, error) {
+// 			height, err := GetSubmatchAsFloat(req, 1) // 1=first regexp submatch
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			return NewJsonResponse(200, map[string]interface{}{
+// 				"id":     id,
+// 				"name":   "The beautiful name",
+// 				"height": height,
+// 			})
+// 		})
+//
+// It panics if n < 1. See MustGetSubmatchAsFloat to avoid testing the
+// returned error.
+func GetSubmatchAsFloat(req *http.Request, n int) (float64, error) {
+	sm, err := GetSubmatch(req, n)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(sm, 64)
+}
+
+// MustGetSubmatch works as GetSubmatch except that it panics in case
+// of error (submatch not found). It has to be used in Responders
+// installed by RegisterRegexpResponder or RegisterResponder + "=~"
+// URL prefix. It allows to retrieve the n-th submatch of the matching
+// regexp, as a string. Example:
+// 	RegisterResponder("GET", `=~^/item/name/([^/]+)\z`,
+// 		func(req *http.Request) (*http.Response, error) {
+// 			name := MustGetSubmatch(req, 1) // 1=first regexp submatch
+// 			return NewJsonResponse(200, map[string]interface{}{
+// 				"id":   123,
+// 				"name": name,
+// 			})
+// 		})
+//
+// It panics if n < 1.
+func MustGetSubmatch(req *http.Request, n int) string {
+	s, err := GetSubmatch(req, n)
+	if err != nil {
+		panic("GetSubmatch failed: " + err.Error())
+	}
+	return s
+}
+
+// MustGetSubmatchAsInt works as GetSubmatchAsInt except that it
+// panics in case of error (submatch not found or invalid int64
+// format). It has to be used in Responders installed by
+// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
+// allows to retrieve the n-th submatch of the matching regexp, as an
+// int64. Example:
+// 	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
+// 		func(req *http.Request) (*http.Response, error) {
+// 			id := MustGetSubmatchAsInt(req, 1) // 1=first regexp submatch
+// 			return NewJsonResponse(200, map[string]interface{}{
+// 				"id":   id,
+// 				"name": "The beautiful name",
+// 			})
+// 		})
+//
+// It panics if n < 1.
+func MustGetSubmatchAsInt(req *http.Request, n int) int64 {
+	i, err := GetSubmatchAsInt(req, n)
+	if err != nil {
+		panic("GetSubmatchAsInt failed: " + err.Error())
+	}
+	return i
+}
+
+// MustGetSubmatchAsUint works as GetSubmatchAsUint except that it
+// panics in case of error (submatch not found or invalid uint64
+// format). It has to be used in Responders installed by
+// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
+// allows to retrieve the n-th submatch of the matching regexp, as a
+// uint64. Example:
+// 	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
+// 		func(req *http.Request) (*http.Response, error) {
+// 			id, err := MustGetSubmatchAsUint(req, 1) // 1=first regexp submatch
+// 			return NewJsonResponse(200, map[string]interface{}{
+// 				"id":   id,
+// 				"name": "The beautiful name",
+// 			})
+// 		})
+//
+// It panics if n < 1.
+func MustGetSubmatchAsUint(req *http.Request, n int) uint64 {
+	u, err := GetSubmatchAsUint(req, n)
+	if err != nil {
+		panic("GetSubmatchAsUint failed: " + err.Error())
+	}
+	return u
+}
+
+// MustGetSubmatchAsFloat works as GetSubmatchAsFloat except that it
+// panics in case of error (submatch not found or invalid float64
+// format). It has to be used in Responders installed by
+// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
+// allows to retrieve the n-th submatch of the matching regexp, as a
+// float64. Example:
+// 	RegisterResponder("PATCH", `=~^/item/id/\d+\?height=(\d+(?:\.\d*)?)\z`,
+// 		func(req *http.Request) (*http.Response, error) {
+// 			height := MustGetSubmatchAsFloat(req, 1) // 1=first regexp submatch
+// 			return NewJsonResponse(200, map[string]interface{}{
+// 				"id":     id,
+// 				"name":   "The beautiful name",
+// 				"height": height,
+// 			})
+// 		})
+//
+// It panics if n < 1.
+func MustGetSubmatchAsFloat(req *http.Request, n int) float64 {
+	f, err := GetSubmatchAsFloat(req, n)
+	if err != nil {
+		panic("GetSubmatchAsFloat failed: " + err.Error())
+	}
+	return f
 }

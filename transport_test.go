@@ -783,6 +783,234 @@ func TestRegisterRegexpResponder(t *testing.T) {
 	}
 }
 
+func TestSubmatches(t *testing.T) {
+	req, err := http.NewRequest("GET", "/foo/bar", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var req2 *http.Request
+
+	t.Run("setSubmatches", func(t *testing.T) {
+		req2 = setSubmatches(req, nil)
+		if req2 != req {
+			t.Error("setSubmatches(req, nil) should return the same request")
+		}
+
+		req2 = setSubmatches(req, []string{})
+		if req2 != req {
+			t.Error("setSubmatches(req, []string{}) should return the same request")
+		}
+
+		req2 = setSubmatches(req, []string{"foo", "123", "-123", "12.3"})
+		if req2 == req {
+			t.Error("setSubmatches(req, []string{...}) should NOT return the same request")
+		}
+	})
+
+	t.Run("GetSubmatch", func(t *testing.T) {
+		_, err := GetSubmatch(req, 1)
+		if err != ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be found in req: %v", err)
+		}
+
+		_, err = GetSubmatch(req2, 5)
+		if err != ErrSubmatchNotFound {
+			t.Errorf("Submatch #5 should not be found in req2: %v", err)
+		}
+
+		s, err := GetSubmatch(req2, 1)
+		if err != nil {
+			t.Errorf("GetSubmatch(req2, 1) failed: %v", err)
+		}
+		if s != "foo" {
+			t.Errorf("GetSubmatch(req2, 1) failed, got: %v, expected: foo", s)
+		}
+
+		s, err = GetSubmatch(req2, 4)
+		if err != nil {
+			t.Errorf("GetSubmatch(req2, 4) failed: %v", err)
+		}
+		if s != "12.3" {
+			t.Errorf("GetSubmatch(req2, 4) failed, got: %v, expected: 12.3", s)
+		}
+
+		s = MustGetSubmatch(req2, 4)
+		if s != "12.3" {
+			t.Errorf("GetSubmatch(req2, 4) failed, got: %v, expected: 12.3", s)
+		}
+	})
+
+	t.Run("GetSubmatchAsInt", func(t *testing.T) {
+		_, err := GetSubmatchAsInt(req, 1)
+		if err != ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be found in req: %v", err)
+		}
+
+		_, err = GetSubmatchAsInt(req2, 4) // not an int
+		if err == nil || err == ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be an int64: %v", err)
+		}
+
+		i, err := GetSubmatchAsInt(req2, 3)
+		if err != nil {
+			t.Errorf("GetSubmatchAsInt(req2, 3) failed: %v", err)
+		}
+		if i != -123 {
+			t.Errorf("GetSubmatchAsInt(req2, 3) failed, got: %d, expected: -123", i)
+		}
+
+		i = MustGetSubmatchAsInt(req2, 3)
+		if i != -123 {
+			t.Errorf("MustGetSubmatchAsInt(req2, 3) failed, got: %d, expected: -123", i)
+		}
+	})
+
+	t.Run("GetSubmatchAsUint", func(t *testing.T) {
+		_, err := GetSubmatchAsUint(req, 1)
+		if err != ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be found in req: %v", err)
+		}
+
+		_, err = GetSubmatchAsUint(req2, 3) // not a uint
+		if err == nil || err == ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be an uint64: %v", err)
+		}
+
+		u, err := GetSubmatchAsUint(req2, 2)
+		if err != nil {
+			t.Errorf("GetSubmatchAsUint(req2, 2) failed: %v", err)
+		}
+		if u != 123 {
+			t.Errorf("GetSubmatchAsUint(req2, 2) failed, got: %d, expected: 123", u)
+		}
+
+		u = MustGetSubmatchAsUint(req2, 2)
+		if u != 123 {
+			t.Errorf("MustGetSubmatchAsUint(req2, 2) failed, got: %d, expected: 123", u)
+		}
+	})
+
+	t.Run("GetSubmatchAsFloat", func(t *testing.T) {
+		_, err := GetSubmatchAsFloat(req, 1)
+		if err != ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be found in req: %v", err)
+		}
+
+		_, err = GetSubmatchAsFloat(req2, 1) // not a float
+		if err == nil || err == ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be an float64: %v", err)
+		}
+
+		f, err := GetSubmatchAsFloat(req2, 4)
+		if err != nil {
+			t.Errorf("GetSubmatchAsFloat(req2, 4) failed: %v", err)
+		}
+		if f != 12.3 {
+			t.Errorf("GetSubmatchAsFloat(req2, 4) failed, got: %f, expected: 12.3", f)
+		}
+
+		f = MustGetSubmatchAsFloat(req2, 4)
+		if f != 12.3 {
+			t.Errorf("MustGetSubmatchAsFloat(req2, 4) failed, got: %f, expected: 12.3", f)
+		}
+	})
+
+	t.Run("GetSubmatch* panics", func(t *testing.T) {
+		for _, test := range []struct {
+			Name        string
+			Fn          func()
+			PanicPrefix string
+		}{
+			{
+				Name:        "GetSubmatch & n < 1",
+				Fn:          func() { GetSubmatch(req, 0) }, // nolint: errcheck
+				PanicPrefix: "getting submatches starts at 1, not 0",
+			},
+			{
+				Name:        "MustGetSubmatch",
+				Fn:          func() { MustGetSubmatch(req, 1) },
+				PanicPrefix: "GetSubmatch failed: " + ErrSubmatchNotFound.Error(),
+			},
+			{
+				Name:        "MustGetSubmatchAsInt",
+				Fn:          func() { MustGetSubmatchAsInt(req2, 4) }, // not an int
+				PanicPrefix: "GetSubmatchAsInt failed: ",
+			},
+			{
+				Name:        "MustGetSubmatchAsUint",
+				Fn:          func() { MustGetSubmatchAsUint(req2, 3) }, // not a uint
+				PanicPrefix: "GetSubmatchAsUint failed: ",
+			},
+			{
+				Name:        "GetSubmatchAsFloat",
+				Fn:          func() { MustGetSubmatchAsFloat(req2, 1) }, // not a float
+				PanicPrefix: "GetSubmatchAsFloat failed: ",
+			},
+		} {
+			var (
+				didntPanic bool
+				panicVal   interface{}
+			)
+			func() {
+				defer func() { panicVal = recover() }()
+				test.Fn()
+				didntPanic = true
+			}()
+
+			if didntPanic {
+				t.Errorf("%s did not panic", test.Name)
+			}
+
+			panicStr, ok := panicVal.(string)
+			if !ok || !strings.HasPrefix(panicStr, test.PanicPrefix) {
+				t.Errorf(`%s panic="%v" expected prefix="%v"`, test.Name, panicVal, test.PanicPrefix)
+			}
+		}
+	})
+
+	t.Run("Full test", func(t *testing.T) {
+		Activate()
+		defer DeactivateAndReset()
+
+		var (
+			id       uint64
+			delta    float64
+			deltaStr string
+			inc      int64
+		)
+		RegisterResponder("GET", `=~^/id/(\d+)\?delta=(\d+(?:\.\d*)?)&inc=(-?\d+)\z`,
+			func(req *http.Request) (*http.Response, error) {
+				id = MustGetSubmatchAsUint(req, 1)
+				delta = MustGetSubmatchAsFloat(req, 2)
+				deltaStr = MustGetSubmatch(req, 2)
+				inc = MustGetSubmatchAsInt(req, 3)
+
+				return NewStringResponse(http.StatusOK, "OK"), nil
+			})
+
+		resp, err := http.Get("http://example.tld/id/123?delta=1.2&inc=-5")
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertBody(t, resp, "OK")
+
+		// Check submatches
+		if id != 123 {
+			t.Errorf("seems MustGetSubmatchAsUint failed, got: %d, expected: 123", id)
+		}
+		if delta != 1.2 {
+			t.Errorf("seems MustGetSubmatchAsFloat failed, got: %f, expected: 1.2", delta)
+		}
+		if deltaStr != "1.2" {
+			t.Errorf("seems MustGetSubmatch failed, got: %v, expected: 1.2", deltaStr)
+		}
+		if inc != -5 {
+			t.Errorf("seems MustGetSubmatchAsInt failed, got: %d, expected: 123", inc)
+		}
+	})
+}
+
 func TestCheckStackTracer(t *testing.T) {
 	req, err := http.NewRequest("GET", "http://foo.bar/", nil)
 	if err != nil {

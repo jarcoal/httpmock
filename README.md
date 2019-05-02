@@ -1,4 +1,4 @@
-# httpmock [![Build Status](https://travis-ci.org/jarcoal/httpmock.png?branch=v1)](https://travis-ci.org/jarcoal/httpmock) [![Coverage Status](https://coveralls.io/repos/github/jarcoal/httpmock/badge.svg?branch=v1)](https://coveralls.io/github/jarcoal/httpmock?branch=v1) [![GoDoc](https://godoc.org/github.com/jarcoal/httpmock?status.svg)](https://godoc.org/github.com/jarcoal/httpmock) [![Version](https://img.shields.io/github/tag/jarcoal/httpmock.svg)](https://github.com/jarcoal/httpmock/releases)
+# httpmock [![Build Status](https://travis-ci.org/jarcoal/httpmock.png?branch=v1)](https://travis-ci.org/jarcoal/httpmock) [![Coverage Status](https://coveralls.io/repos/github/jarcoal/httpmock/badge.svg?branch=v1)](https://coveralls.io/github/jarcoal/httpmock?branch=v1) [![GoDoc](https://godoc.org/github.com/jarcoal/httpmock?status.svg)](https://godoc.org/github.com/jarcoal/httpmock) [![Version](https://img.shields.io/github/tag/jarcoal/httpmock.svg)](https://github.com/jarcoal/httpmock/releases) [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go/#testing)
 
 Easy mocking of http responses from external resources.
 
@@ -107,6 +107,18 @@ func TestFetchArticles(t *testing.T) {
 				return httpmock.NewStringResponse(500, ""), nil
 			}
 			return resp, nil
+		},
+	)
+
+	// return an article related to the request with the help of regexp submatch (\d+)
+	httpmock.RegisterResponder("GET", `=~^https://api.mybiz.com/articles/id/(\d+)\z`,
+		func(req *http.Request) (*http.Response, error) {
+			// Get ID from request
+			id := httpmock.MustGetSubmatchAsUint(req, 1) // 1=first regexp submatch
+			return httpmock.NewJsonResponse(200, map[string]interface{}{
+				"id":   id,
+				"name": "My Great Article",
+			})
 		},
 	)
 
