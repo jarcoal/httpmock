@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,18 @@ func assertBody(t *testing.T, resp *http.Response, expected string) {
 
 	if got != expected {
 		t.Errorf("Expected body: %#v, got %#v", expected, got)
+	}
+}
+
+func TestRouteKey(t *testing.T) {
+	got, expected := noResponder.String(), "NO_RESPONDER"
+	if got != expected {
+		t.Errorf("got: %v, expected: %v", got, expected)
+	}
+
+	got, expected = routeKey{Method: "GET", URL: "/foo"}.String(), "GET /foo"
+	if got != expected {
+		t.Errorf("got: %v, expected: %v", got, expected)
 	}
 }
 
@@ -95,7 +108,7 @@ func TestMockTransportDefaultMethod(t *testing.T) {
 	Activate()
 	defer Deactivate()
 
-	urlString := "https://github.com/"
+	const urlString = "https://github.com/"
 	url, err := url.Parse(urlString)
 	if err != nil {
 		t.Fatal(err)
@@ -208,77 +221,157 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 	// Just in case a panic occurs
 	defer DeactivateAndReset()
 
-	for responder, paths := range map[string][]string{
-		// unsorted query string matches exactly
-		"/hello/world?query=string&abc=zz#fragment": {
-			testURL + "hello/world?query=string&abc=zz#fragment",
+	for _, test := range []struct {
+		Responder string
+		Paths     []string
+	}{
+		{
+			// unsorted query string matches exactly
+			Responder: "/hello/world?query=string&abc=zz#fragment",
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+			},
+		},
+		{
+			// sorted query string matches all cases
+			Responder: "/hello/world?abc=zz&query=string#fragment",
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?abc=zz&query=string#fragment",
+			},
+		},
+		{
+			// unsorted query string matches exactly
+			Responder: "/hello/world?query=string&abc=zz",
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz",
+			},
+		},
+		{
+			// sorted query string matches all cases
+			Responder: "/hello/world?abc=zz&query=string",
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world?abc=zz&query=string",
+			},
+		},
+		{
+			// unsorted query string matches exactly
+			Responder: "/hello/world?query=string&query=string2&abc=zz",
+			Paths: []string{
+				testURL + "hello/world?query=string&query=string2&abc=zz",
+			},
 		},
 		// sorted query string matches all cases
-		"/hello/world?abc=zz&query=string#fragment": {
-			testURL + "hello/world?query=string&abc=zz#fragment",
-			testURL + "hello/world?abc=zz&query=string#fragment",
+		{
+			Responder: "/hello/world?abc=zz&query=string&query=string2",
+			Paths: []string{
+				testURL + "hello/world?query=string&query=string2&abc=zz",
+				testURL + "hello/world?query=string2&query=string&abc=zz",
+				testURL + "hello/world?abc=zz&query=string2&query=string",
+			},
 		},
-		// unsorted query string matches exactly
-		"/hello/world?query=string&abc=zz": {
-			testURL + "hello/world?query=string&abc=zz",
+		{
+			Responder: "/hello/world?query",
+			Paths: []string{
+				testURL + "hello/world?query",
+			},
 		},
-		// sorted query string matches all cases
-		"/hello/world?abc=zz&query=string": {
-			testURL + "hello/world?query=string&abc=zz",
-			testURL + "hello/world?abc=zz&query=string",
+		{
+			Responder: "/hello/world?query&abc",
+			Paths: []string{
+				testURL + "hello/world?query&abc",
+				// testURL + "hello/world?abc&query" won' work as "=" is needed, see below
+			},
 		},
-		// unsorted query string matches exactly
-		"/hello/world?query=string&query=string2&abc=zz": {
-			testURL + "hello/world?query=string&query=string2&abc=zz",
+		{
+			// In case the sorting does not matter for received params without
+			// values, we must register params with "="
+			Responder: "/hello/world?abc=&query=",
+			Paths: []string{
+				testURL + "hello/world?query&abc",
+				testURL + "hello/world?abc&query",
+			},
 		},
-		// sorted query string matches all cases
-		"/hello/world?abc=zz&query=string&query=string2": {
-			testURL + "hello/world?query=string&query=string2&abc=zz",
-			testURL + "hello/world?query=string2&query=string&abc=zz",
-			testURL + "hello/world?abc=zz&query=string2&query=string",
+		{
+			Responder: "/hello/world#fragment",
+			Paths: []string{
+				testURL + "hello/world#fragment",
+			},
 		},
-		"/hello/world?query": {
-			testURL + "hello/world?query",
+		{
+			Responder: "/hello/world",
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world#fragment",
+				testURL + "hello/world",
+			},
 		},
-		"/hello/world?query&abc": {
-			testURL + "hello/world?query&abc",
-			// testURL + "hello/world?abc&query" won' work as "=" is needed, see below
+		// Regexp cases
+		{
+			Responder: `=~^http://.*/hello/.*ld\z`,
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world#fragment",
+				testURL + "hello/world",
+			},
 		},
-		// In case the sorting does not matter for received params without
-		// values, we must register params with "="
-		"/hello/world?abc=&query=": {
-			testURL + "hello/world?query&abc",
-			testURL + "hello/world?abc&query",
+		{
+			Responder: `=~^http://.*/hello/.*ld(\z|[?#])`,
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world#fragment",
+				testURL + "hello/world",
+			},
 		},
-		"/hello/world#fragment": {
-			testURL + "hello/world#fragment",
+		{
+			Responder: `=~^/hello/.*ld\z`,
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world#fragment",
+				testURL + "hello/world",
+			},
 		},
-		"/hello/world": {
-			testURL + "hello/world?query=string&abc=zz#fragment",
-			testURL + "hello/world?query=string&abc=zz",
-			testURL + "hello/world#fragment",
-			testURL + "hello/world",
+		{
+			Responder: `=~^/hello/.*ld(\z|[?#])`,
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+				testURL + "hello/world#fragment",
+				testURL + "hello/world",
+			},
+		},
+		{
+			Responder: `=~abc=zz`,
+			Paths: []string{
+				testURL + "hello/world?query=string&abc=zz#fragment",
+				testURL + "hello/world?query=string&abc=zz",
+			},
 		},
 	} {
 		Activate()
 
 		// register the responder
-		RegisterResponder("GET", responder, NewStringResponder(200, "hello world"))
+		RegisterResponder("GET", test.Responder, NewStringResponder(200, "hello world"))
 
-		for _, reqURL := range paths {
+		for _, reqURL := range test.Paths {
 			// make a request for the testURL with a querystring
 			resp, err := http.Get(reqURL)
 			if err != nil {
-				t.Fatalf("%s: expected request %s to succeed", responder, reqURL)
+				t.Fatalf("%s: expected request %s to succeed", test.Responder, reqURL)
 			}
 
 			data, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				t.Fatalf("%s: %s error: %s", responder, reqURL, err)
+				t.Fatalf("%s: %s error: %s", test.Responder, reqURL, err)
 			}
 
 			if string(data) != "hello world" {
-				t.Fatalf("%s: expected body of %s to be 'hello world'", responder, reqURL)
+				t.Fatalf("%s: expected body of %s to be 'hello world'", test.Responder, reqURL)
 			}
 		}
 
@@ -479,11 +572,13 @@ func TestMockTransportCallCount(t *testing.T) {
 	Activate()
 	defer Deactivate()
 
-	url := "https://github.com/"
-	url2 := "https://gitlab.com/"
+	const (
+		url  = "https://github.com/path?b=1&a=2"
+		url2 = "https://gitlab.com/"
+	)
 
 	RegisterResponder("GET", url, NewStringResponder(200, "body"))
-	RegisterResponder("POST", url2, NewStringResponder(200, "body"))
+	RegisterResponder("POST", "=~gitlab", NewStringResponder(200, "body"))
 
 	_, err := http.Get(url)
 	if err != nil {
@@ -492,14 +587,14 @@ func TestMockTransportCallCount(t *testing.T) {
 
 	buff := new(bytes.Buffer)
 	json.NewEncoder(buff).Encode("{}") // nolint: errcheck
-	_, err1 := http.Post(url2, "application/json", buff)
-	if err1 != nil {
-		t.Fatal(err1)
+	_, err = http.Post(url2, "application/json", buff)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	_, err2 := http.Get(url)
-	if err2 != nil {
-		t.Fatal(err2)
+	_, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	totalCallCount := GetTotalCallCount()
@@ -508,11 +603,12 @@ func TestMockTransportCallCount(t *testing.T) {
 	}
 
 	info := GetCallCountInfo()
-	expectedInfo := map[string]int{}
-	urlCallkey := "GET " + url
-	url2Callkey := "POST " + url2
-	expectedInfo[urlCallkey] = 2
-	expectedInfo[url2Callkey] = 1
+	expectedInfo := map[string]int{
+		"GET " + url: 2,
+		// Regexp match generates 2 entries:
+		"POST " + url2:  1, // the matched call
+		"POST =~gitlab": 1, // the regexp responder
+	}
 
 	if !reflect.DeepEqual(info, expectedInfo) {
 		t.Fatalf("did not correctly track the call count info. expected it to be \n %+v \n but it was \n %+v \n", expectedInfo, info)
@@ -524,7 +620,6 @@ func TestMockTransportCallCount(t *testing.T) {
 	if afterResetTotalCallCount != 0 {
 		t.Fatalf("did not reset the total count of calls correctly. expected it to be 0 after reset, but it was %v", afterResetTotalCallCount)
 	}
-
 }
 
 func TestRegisterResponderWithQuery(t *testing.T) {
@@ -576,6 +671,7 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 				},
 				"a=1&b=2&a=3&c&b=4&a=2",
 				"b=2&a=1&c=&b=4&a=2&a=3",
+				nil,
 			},
 			URLs: []string{
 				testURLPath + "?a=1&b=2&a=3&c&b=4&a=2",
@@ -617,16 +713,24 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 	resp := NewStringResponder(200, "hello world!")
 
 	for _, test := range []struct {
+		Path        string
 		Query       interface{}
 		PanicPrefix string
 	}{
 		{
+			Path:        "foobar",
 			Query:       "%",
 			PanicPrefix: "RegisterResponderWithQuery bad query string: ",
 		},
 		{
+			Path:        "foobar",
 			Query:       1234,
 			PanicPrefix: "RegisterResponderWithQuery bad query type int. Only url.Values, map[string]string and string are allowed",
+		},
+		{
+			Path:        `=~regexp.*\z`,
+			Query:       "",
+			PanicPrefix: `path begins with "=~", RegisterResponder should be used instead of RegisterResponderWithQuery`,
 		},
 	} {
 		var (
@@ -638,7 +742,7 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 				panicVal = recover()
 			}()
 
-			RegisterResponderWithQuery("GET", "foobar", test.Query, resp)
+			RegisterResponderWithQuery("GET", test.Path, test.Query, resp)
 			didntPanic = true
 		}()
 
@@ -652,6 +756,259 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 				test.Query, panicVal, test.PanicPrefix)
 		}
 	}
+}
+
+func TestRegisterRegexpResponder(t *testing.T) {
+	Activate()
+	defer DeactivateAndReset()
+
+	rx := regexp.MustCompile("ex.mple")
+
+	RegisterRegexpResponder("GET", rx, NewStringResponder(200, "first"))
+	// Overwrite responder
+	RegisterRegexpResponder("GET", rx, NewStringResponder(200, "second"))
+
+	resp, err := http.Get(testURL)
+	if err != nil {
+		t.Fatalf("expected request %s to succeed", testURL)
+	}
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("%s error: %s", testURL, err)
+	}
+
+	if string(data) != "second" {
+		t.Fatalf("expected body of %s to be 'hello world'", testURL)
+	}
+}
+
+func TestSubmatches(t *testing.T) {
+	req, err := http.NewRequest("GET", "/foo/bar", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var req2 *http.Request
+
+	t.Run("setSubmatches", func(t *testing.T) {
+		req2 = setSubmatches(req, nil)
+		if req2 != req {
+			t.Error("setSubmatches(req, nil) should return the same request")
+		}
+
+		req2 = setSubmatches(req, []string{})
+		if req2 != req {
+			t.Error("setSubmatches(req, []string{}) should return the same request")
+		}
+
+		req2 = setSubmatches(req, []string{"foo", "123", "-123", "12.3"})
+		if req2 == req {
+			t.Error("setSubmatches(req, []string{...}) should NOT return the same request")
+		}
+	})
+
+	t.Run("GetSubmatch", func(t *testing.T) {
+		_, err := GetSubmatch(req, 1)
+		if err != ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be found in req: %v", err)
+		}
+
+		_, err = GetSubmatch(req2, 5)
+		if err != ErrSubmatchNotFound {
+			t.Errorf("Submatch #5 should not be found in req2: %v", err)
+		}
+
+		s, err := GetSubmatch(req2, 1)
+		if err != nil {
+			t.Errorf("GetSubmatch(req2, 1) failed: %v", err)
+		}
+		if s != "foo" {
+			t.Errorf("GetSubmatch(req2, 1) failed, got: %v, expected: foo", s)
+		}
+
+		s, err = GetSubmatch(req2, 4)
+		if err != nil {
+			t.Errorf("GetSubmatch(req2, 4) failed: %v", err)
+		}
+		if s != "12.3" {
+			t.Errorf("GetSubmatch(req2, 4) failed, got: %v, expected: 12.3", s)
+		}
+
+		s = MustGetSubmatch(req2, 4)
+		if s != "12.3" {
+			t.Errorf("GetSubmatch(req2, 4) failed, got: %v, expected: 12.3", s)
+		}
+	})
+
+	t.Run("GetSubmatchAsInt", func(t *testing.T) {
+		_, err := GetSubmatchAsInt(req, 1)
+		if err != ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be found in req: %v", err)
+		}
+
+		_, err = GetSubmatchAsInt(req2, 4) // not an int
+		if err == nil || err == ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be an int64: %v", err)
+		}
+
+		i, err := GetSubmatchAsInt(req2, 3)
+		if err != nil {
+			t.Errorf("GetSubmatchAsInt(req2, 3) failed: %v", err)
+		}
+		if i != -123 {
+			t.Errorf("GetSubmatchAsInt(req2, 3) failed, got: %d, expected: -123", i)
+		}
+
+		i = MustGetSubmatchAsInt(req2, 3)
+		if i != -123 {
+			t.Errorf("MustGetSubmatchAsInt(req2, 3) failed, got: %d, expected: -123", i)
+		}
+	})
+
+	t.Run("GetSubmatchAsUint", func(t *testing.T) {
+		_, err := GetSubmatchAsUint(req, 1)
+		if err != ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be found in req: %v", err)
+		}
+
+		_, err = GetSubmatchAsUint(req2, 3) // not a uint
+		if err == nil || err == ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be an uint64: %v", err)
+		}
+
+		u, err := GetSubmatchAsUint(req2, 2)
+		if err != nil {
+			t.Errorf("GetSubmatchAsUint(req2, 2) failed: %v", err)
+		}
+		if u != 123 {
+			t.Errorf("GetSubmatchAsUint(req2, 2) failed, got: %d, expected: 123", u)
+		}
+
+		u = MustGetSubmatchAsUint(req2, 2)
+		if u != 123 {
+			t.Errorf("MustGetSubmatchAsUint(req2, 2) failed, got: %d, expected: 123", u)
+		}
+	})
+
+	t.Run("GetSubmatchAsFloat", func(t *testing.T) {
+		_, err := GetSubmatchAsFloat(req, 1)
+		if err != ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be found in req: %v", err)
+		}
+
+		_, err = GetSubmatchAsFloat(req2, 1) // not a float
+		if err == nil || err == ErrSubmatchNotFound {
+			t.Errorf("Submatch should not be an float64: %v", err)
+		}
+
+		f, err := GetSubmatchAsFloat(req2, 4)
+		if err != nil {
+			t.Errorf("GetSubmatchAsFloat(req2, 4) failed: %v", err)
+		}
+		if f != 12.3 {
+			t.Errorf("GetSubmatchAsFloat(req2, 4) failed, got: %f, expected: 12.3", f)
+		}
+
+		f = MustGetSubmatchAsFloat(req2, 4)
+		if f != 12.3 {
+			t.Errorf("MustGetSubmatchAsFloat(req2, 4) failed, got: %f, expected: 12.3", f)
+		}
+	})
+
+	t.Run("GetSubmatch* panics", func(t *testing.T) {
+		for _, test := range []struct {
+			Name        string
+			Fn          func()
+			PanicPrefix string
+		}{
+			{
+				Name:        "GetSubmatch & n < 1",
+				Fn:          func() { GetSubmatch(req, 0) }, // nolint: errcheck
+				PanicPrefix: "getting submatches starts at 1, not 0",
+			},
+			{
+				Name:        "MustGetSubmatch",
+				Fn:          func() { MustGetSubmatch(req, 1) },
+				PanicPrefix: "GetSubmatch failed: " + ErrSubmatchNotFound.Error(),
+			},
+			{
+				Name:        "MustGetSubmatchAsInt",
+				Fn:          func() { MustGetSubmatchAsInt(req2, 4) }, // not an int
+				PanicPrefix: "GetSubmatchAsInt failed: ",
+			},
+			{
+				Name:        "MustGetSubmatchAsUint",
+				Fn:          func() { MustGetSubmatchAsUint(req2, 3) }, // not a uint
+				PanicPrefix: "GetSubmatchAsUint failed: ",
+			},
+			{
+				Name:        "GetSubmatchAsFloat",
+				Fn:          func() { MustGetSubmatchAsFloat(req2, 1) }, // not a float
+				PanicPrefix: "GetSubmatchAsFloat failed: ",
+			},
+		} {
+			var (
+				didntPanic bool
+				panicVal   interface{}
+			)
+			func() {
+				defer func() { panicVal = recover() }()
+				test.Fn()
+				didntPanic = true
+			}()
+
+			if didntPanic {
+				t.Errorf("%s did not panic", test.Name)
+			}
+
+			panicStr, ok := panicVal.(string)
+			if !ok || !strings.HasPrefix(panicStr, test.PanicPrefix) {
+				t.Errorf(`%s panic="%v" expected prefix="%v"`, test.Name, panicVal, test.PanicPrefix)
+			}
+		}
+	})
+
+	t.Run("Full test", func(t *testing.T) {
+		Activate()
+		defer DeactivateAndReset()
+
+		var (
+			id       uint64
+			delta    float64
+			deltaStr string
+			inc      int64
+		)
+		RegisterResponder("GET", `=~^/id/(\d+)\?delta=(\d+(?:\.\d*)?)&inc=(-?\d+)\z`,
+			func(req *http.Request) (*http.Response, error) {
+				id = MustGetSubmatchAsUint(req, 1)
+				delta = MustGetSubmatchAsFloat(req, 2)
+				deltaStr = MustGetSubmatch(req, 2)
+				inc = MustGetSubmatchAsInt(req, 3)
+
+				return NewStringResponse(http.StatusOK, "OK"), nil
+			})
+
+		resp, err := http.Get("http://example.tld/id/123?delta=1.2&inc=-5")
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertBody(t, resp, "OK")
+
+		// Check submatches
+		if id != 123 {
+			t.Errorf("seems MustGetSubmatchAsUint failed, got: %d, expected: 123", id)
+		}
+		if delta != 1.2 {
+			t.Errorf("seems MustGetSubmatchAsFloat failed, got: %f, expected: 1.2", delta)
+		}
+		if deltaStr != "1.2" {
+			t.Errorf("seems MustGetSubmatch failed, got: %v, expected: 1.2", deltaStr)
+		}
+		if inc != -5 {
+			t.Errorf("seems MustGetSubmatchAsInt failed, got: %d, expected: 123", inc)
+		}
+	})
 }
 
 func TestCheckStackTracer(t *testing.T) {
