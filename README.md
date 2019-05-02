@@ -73,7 +73,7 @@ func TestFetchArticles(t *testing.T) {
 		httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
 
 	// Regexp match (could use httpmock.RegisterRegexpResponder instead)
-	httpmock.RegisterResponder("GET", `=~^https://api.mybiz.com/articles/id/\d+\z`,
+	httpmock.RegisterResponder("GET", `=~^https://api\.mybiz\.com/articles/id/\d+\z`,
 		httpmock.NewStringResponder(200, `{"id": 1, "name": "My Great Article"}`))
 
 	// do stuff that makes a request to articles
@@ -86,7 +86,7 @@ func TestFetchArticles(t *testing.T) {
 	info := httpmock.GetCallCountInfo()
 	info["GET https://api.mybiz.com/articles"] // number of GET calls made to https://api.mybiz.com/articles
 	info["GET https://api.mybiz.com/articles/id/12"] // number of GET calls made to https://api.mybiz.com/articles/id/12
-	info[`GET =~^https://api.mybiz.com/articles/id/\d+\z`] // number of GET calls made to https://api.mybiz.com/articles/id/<any-number>
+	info[`GET =~^https://api\.mybiz\.com/articles/id/\d+\z`] // number of GET calls made to https://api.mybiz.com/articles/id/<any-number>
 }
 ```
 
@@ -111,7 +111,7 @@ func TestFetchArticles(t *testing.T) {
 	)
 
 	// return an article related to the request with the help of regexp submatch (\d+)
-	httpmock.RegisterResponder("GET", `=~^https://api.mybiz.com/articles/id/(\d+)\z`,
+	httpmock.RegisterResponder("GET", `=~^https://api\.mybiz\.com/articles/id/(\d+)\z`,
 		func(req *http.Request) (*http.Response, error) {
 			// Get ID from request
 			id := httpmock.MustGetSubmatchAsUint(req, 1) // 1=first regexp submatch
