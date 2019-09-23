@@ -4,7 +4,7 @@ Easy mocking of http responses from external resources.
 
 ## Install
 
-Currently supports Go 1.7 - 1.12.
+Currently supports Go 1.7 - 1.13.
 
 `v1` branch has to be used instead of `master`.
 
