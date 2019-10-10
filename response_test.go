@@ -10,7 +10,7 @@ import (
 )
 
 func TestResponderFromResponse(t *testing.T) {
-	responder := ResponderFromResponse(NewStringResponse(200, "hello world"))
+	responder := ResponderFromResponse(NewStringResponse(http.StatusOK, "hello world"))
 
 	req, err := http.NewRequest(http.MethodGet, testURL, nil)
 	if err != nil {
@@ -51,7 +51,7 @@ func TestResponderFromResponse(t *testing.T) {
 func TestNewNotFoundResponder(t *testing.T) {
 	responder := NewNotFoundResponder(func(args ...interface{}) {})
 
-	req, err := http.NewRequest("GET", "http://foo.bar/path", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://foo.bar/path", nil)
 	if err != nil {
 		t.Fatal("Error creating request")
 	}
@@ -94,7 +94,7 @@ func TestNewNotFoundResponder(t *testing.T) {
 
 func TestNewStringResponse(t *testing.T) {
 	body := "hello world"
-	status := 200
+	status := http.StatusOK
 	response := NewStringResponse(status, body)
 
 	data, err := ioutil.ReadAll(response.Body)
@@ -113,7 +113,7 @@ func TestNewStringResponse(t *testing.T) {
 
 func TestNewBytesResponse(t *testing.T) {
 	body := []byte("hello world")
-	status := 200
+	status := http.StatusOK
 	response := NewBytesResponse(status, body)
 
 	data, err := ioutil.ReadAll(response.Body)
@@ -136,7 +136,7 @@ func TestNewJsonResponse(t *testing.T) {
 	}
 
 	body := &schema{"world"}
-	status := 200
+	status := http.StatusOK
 
 	response, err := NewJsonResponse(status, body)
 	if err != nil {
@@ -167,7 +167,7 @@ func TestNewXmlResponse(t *testing.T) {
 	}
 
 	body := &schema{"world"}
-	status := 200
+	status := http.StatusOK
 
 	response, err := NewXmlResponse(status, body)
 	if err != nil {
@@ -211,7 +211,7 @@ func TestNewErrorResponder(t *testing.T) {
 
 func TestRewindResponse(t *testing.T) {
 	body := []byte("hello world")
-	status := 200
+	status := http.StatusOK
 	responses := []*http.Response{
 		NewBytesResponse(status, body),
 		NewStringResponse(status, string(body)),

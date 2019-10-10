@@ -39,7 +39,7 @@ func TestRouteKey(t *testing.T) {
 		t.Errorf("got: %v, expected: %v", got, expected)
 	}
 
-	got, expected = routeKey{Method: "GET", URL: "/foo"}.String(), "GET /foo"
+	got, expected = routeKey{Method: http.MethodGet, URL: "/foo"}.String(), "GET /foo"
 	if got != expected {
 		t.Errorf("got: %v, expected: %v", got, expected)
 	}
@@ -52,7 +52,7 @@ func TestMockTransport(t *testing.T) {
 	url := "https://github.com/"
 	body := `["hello world"]` + "\n"
 
-	RegisterResponder("GET", url, NewStringResponder(200, body))
+	RegisterResponder(http.MethodGet, url, NewStringResponder(http.StatusOK, body))
 
 	// Read it as a simple string (ioutil.ReadAll will trigger io.EOF)
 	func() {
@@ -115,7 +115,7 @@ func TestMockTransportDefaultMethod(t *testing.T) {
 	}
 	body := "hello world"
 
-	RegisterResponder("GET", urlString, NewStringResponder(200, body))
+	RegisterResponder(http.MethodGet, urlString, NewStringResponder(http.StatusOK, body))
 
 	req := &http.Request{
 		URL: url,
@@ -146,7 +146,7 @@ func TestMockTransportReset(t *testing.T) {
 		t.Fatal("expected no responders at this point")
 	}
 
-	RegisterResponder("GET", testURL, nil)
+	RegisterResponder(http.MethodGet, testURL, nil)
 
 	if len(DefaultTransport.responders) != 1 {
 		t.Fatal("expected one responder")
@@ -173,7 +173,7 @@ func TestMockTransportNoResponder(t *testing.T) {
 		t.Fatal("expected to receive a connection error due to lack of responders")
 	}
 
-	RegisterNoResponder(NewStringResponder(200, "hello world"))
+	RegisterNoResponder(NewStringResponder(http.StatusOK, "hello world"))
 
 	resp, err := http.Get(testURL)
 	if err != nil {
@@ -195,7 +195,7 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 	defer DeactivateAndReset()
 
 	// register the testURL responder
-	RegisterResponder("GET", testURL, NewStringResponder(200, "hello world"))
+	RegisterResponder(http.MethodGet, testURL, NewStringResponder(http.StatusOK, "hello world"))
 
 	for _, suffix := range []string{"?", "?hello=world", "?hello=world#foo", "?hello=world&hello=all", "#foo"} {
 		reqURL := testURL + suffix
@@ -356,7 +356,7 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 		Activate()
 
 		// register the responder
-		RegisterResponder("GET", test.Responder, NewStringResponder(200, "hello world"))
+		RegisterResponder(http.MethodGet, test.Responder, NewStringResponder(http.StatusOK, "hello world"))
 
 		for _, reqURL := range test.Paths {
 			// make a request for the testURL with a querystring
@@ -423,9 +423,9 @@ func TestMockTransportNonDefault(t *testing.T) {
 
 	body := "hello world!"
 
-	RegisterResponder("GET", testURL, NewStringResponder(200, body))
+	RegisterResponder(http.MethodGet, testURL, NewStringResponder(http.StatusOK, body))
 
-	req, err := http.NewRequest("GET", testURL, nil)
+	req, err := http.NewRequest(http.MethodGet, testURL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,18 +489,18 @@ func TestMockTransportRespectsCancel(t *testing.T) {
 	for _, c := range cases {
 		Reset()
 		if c.withPanic {
-			RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
+			RegisterResponder(http.MethodGet, testURL, func(r *http.Request) (*http.Response, error) {
 				time.Sleep(10 * time.Millisecond)
 				panic("oh no")
 			})
 		} else {
-			RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
+			RegisterResponder(http.MethodGet, testURL, func(r *http.Request) (*http.Response, error) {
 				time.Sleep(10 * time.Millisecond)
 				return NewStringResponse(http.StatusOK, "hello world"), nil
 			})
 		}
 
-		req, err := http.NewRequest("GET", testURL, nil)
+		req, err := http.NewRequest(http.MethodGet, testURL, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -554,7 +554,7 @@ func TestMockTransportRespectsTimeout(t *testing.T) {
 	defer DeactivateAndReset()
 
 	RegisterResponder(
-		"GET", testURL,
+		http.MethodGet, testURL,
 		func(r *http.Request) (*http.Response, error) {
 			time.Sleep(100 * timeout)
 			return NewStringResponse(http.StatusOK, ""), nil
@@ -577,8 +577,8 @@ func TestMockTransportCallCount(t *testing.T) {
 		url2 = "https://gitlab.com/"
 	)
 
-	RegisterResponder("GET", url, NewStringResponder(200, "body"))
-	RegisterResponder("POST", "=~gitlab", NewStringResponder(200, "body"))
+	RegisterResponder(http.MethodGet, url, NewStringResponder(http.StatusOK, "body"))
+	RegisterResponder(http.MethodPost, "=~gitlab", NewStringResponder(http.StatusOK, "body"))
 
 	_, err := http.Get(url)
 	if err != nil {
@@ -683,10 +683,10 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 	} {
 		for _, query := range test.Queries {
 			ActivateNonDefault(client)
-			RegisterResponderWithQuery("GET", testURLPath, query, NewStringResponder(200, body))
+			RegisterResponderWithQuery(http.MethodGet, testURLPath, query, NewStringResponder(http.StatusOK, body))
 
 			for _, url := range test.URLs {
-				req, err := http.NewRequest("GET", url, nil)
+				req, err := http.NewRequest(http.MethodGet, url, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -710,7 +710,7 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 }
 
 func TestRegisterResponderWithQueryPanic(t *testing.T) {
-	resp := NewStringResponder(200, "hello world!")
+	resp := NewStringResponder(http.StatusOK, "hello world!")
 
 	for _, test := range []struct {
 		Path        string
@@ -742,7 +742,7 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 				panicVal = recover()
 			}()
 
-			RegisterResponderWithQuery("GET", test.Path, test.Query, resp)
+			RegisterResponderWithQuery(http.MethodGet, test.Path, test.Query, resp)
 			didntPanic = true
 		}()
 
@@ -764,9 +764,9 @@ func TestRegisterRegexpResponder(t *testing.T) {
 
 	rx := regexp.MustCompile("ex.mple")
 
-	RegisterRegexpResponder("GET", rx, NewStringResponder(200, "first"))
+	RegisterRegexpResponder(http.MethodGet, rx, NewStringResponder(http.StatusOK, "first"))
 	// Overwrite responder
-	RegisterRegexpResponder("GET", rx, NewStringResponder(200, "second"))
+	RegisterRegexpResponder(http.MethodGet, rx, NewStringResponder(http.StatusOK, "second"))
 
 	resp, err := http.Get(testURL)
 	if err != nil {
@@ -784,7 +784,7 @@ func TestRegisterRegexpResponder(t *testing.T) {
 }
 
 func TestSubmatches(t *testing.T) {
-	req, err := http.NewRequest("GET", "/foo/bar", nil)
+	req, err := http.NewRequest(http.MethodGet, "/foo/bar", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -979,7 +979,7 @@ func TestSubmatches(t *testing.T) {
 			deltaStr string
 			inc      int64
 		)
-		RegisterResponder("GET", `=~^/id/(\d+)\?delta=(\d+(?:\.\d*)?)&inc=(-?\d+)\z`,
+		RegisterResponder(http.MethodGet, `=~^/id/(\d+)\?delta=(\d+(?:\.\d*)?)&inc=(-?\d+)\z`,
 			func(req *http.Request) (*http.Response, error) {
 				id = MustGetSubmatchAsUint(req, 1)
 				delta = MustGetSubmatchAsFloat(req, 2)
@@ -1012,7 +1012,7 @@ func TestSubmatches(t *testing.T) {
 }
 
 func TestCheckStackTracer(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://foo.bar/", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://foo.bar/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1084,8 +1084,8 @@ func TestCheckStackTracer(t *testing.T) {
 
 	const url = "https://foo.bar/"
 	mesg = ""
-	RegisterResponder("GET", url,
-		NewStringResponder(200, "{}").
+	RegisterResponder(http.MethodGet, url,
+		NewStringResponder(http.StatusOK, "{}").
 			Trace(func(args ...interface{}) { mesg = args[0].(string) }))
 
 	resp, err := http.Get(url)

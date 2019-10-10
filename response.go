@@ -58,8 +58,8 @@ func (r Responder) Once(fn ...func(...interface{})) Responder {
 //   ...
 //   func TestMyApp(t *testing.T) {
 //   	...
-//   	httpmock.RegisterResponder("GET", "/foo/bar",
-//    	httpmock.NewStringResponder(200, "{}").Trace(t.Log),
+//   	httpmock.RegisterResponder(http.MethodGet, "/foo/bar",
+//    	httpmock.NewStringResponder(http.StatusOK, "{}").Trace(t.Log),
 //   	)
 func (r Responder) Trace(fn func(...interface{})) Responder {
 	return func(req *http.Request) (*http.Response, error) {
@@ -189,9 +189,9 @@ func NewJsonResponder(status int, body interface{}) (Responder, error) { // noli
 // temporary variable and an error check, and so can be used as
 // NewStringResponder or NewBytesResponder in such context:
 //   RegisterResponder(
-//     "GET",
+//     http.MethodGet,
 //     "/test/path",
-//     NewJSONResponderOrPanic(200, &MyBody),
+//     NewJSONResponderOrPanic(http.StatusOK, &MyBody),
 //   )
 func NewJsonResponderOrPanic(status int, body interface{}) Responder { // nolint: golint
 	responder, err := NewJsonResponder(status, body)
@@ -229,9 +229,9 @@ func NewXmlResponder(status int, body interface{}) (Responder, error) { // nolin
 // temporary variable and an error check, and so can be used as
 // NewStringResponder or NewBytesResponder in such context:
 //   RegisterResponder(
-//     "GET",
+//     http.MethodGet,
 //     "/test/path",
-//     NewXmlResponderOrPanic(200, &MyBody),
+//     NewXmlResponderOrPanic(http.StatusOK, &MyBody),
 //   )
 func NewXmlResponderOrPanic(status int, body interface{}) Responder { // nolint: golint
 	responder, err := NewXmlResponder(status, body)

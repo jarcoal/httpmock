@@ -7,12 +7,12 @@ Simple Example:
   	defer httpmock.DeactivateAndReset()
 
   	// Exact URL match
-  	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles",
-  		httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
+  	httpmock.RegisterResponder(http.MethodGet, "https://api.mybiz.com/articles",
+  		httpmock.NewStringResponder(http.StatusOK, `[{"id": 1, "name": "My Great Article"}]`))
 
   	// Regexp match (could use httpmock.RegisterRegexpResponder instead)
-  	httpmock.RegisterResponder("GET", `=~^https://api\.mybiz\.com/articles/id/\d+\z`,
-  		httpmock.NewStringResponder(200, `{"id": 1, "name": "My Great Article"}`))
+  	httpmock.RegisterResponder(http.MethodGet, `=~^https://api\.mybiz\.com/articles/id/\d+\z`,
+  		httpmock.NewStringResponder(http.StatusOK, `{"id": 1, "name": "My Great Article"}`))
 
   	// do stuff that makes a request to articles
 
@@ -35,22 +35,22 @@ Advanced Example:
   	articles := make([]map[string]interface{}, 0)
 
   	// mock to list out the articles
-  	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles",
+  	httpmock.RegisterResponder(http.MethodGet, "https://api.mybiz.com/articles",
   		func(req *http.Request) (*http.Response, error) {
-  			resp, err := httpmock.NewJsonResponse(200, articles)
+  			resp, err := httpmock.NewJsonResponse(http.StatusOK, articles)
   			if err != nil {
-  				return httpmock.NewStringResponse(500, ""), nil
+  				return httpmock.NewStringResponse(http.StatusInternalServerError, ""), nil
   			}
   			return resp, nil
   		},
   	)
 
   	// return an article related to the request with the help of regexp submatch (\d+)
-  	httpmock.RegisterResponder("GET", `=~^https://api\.mybiz\.com/articles/id/(\d+)\z`,
+  	httpmock.RegisterResponder(http.MethodGet, `=~^https://api\.mybiz\.com/articles/id/(\d+)\z`,
   		func(req *http.Request) (*http.Response, error) {
   			// Get ID from request
   			id := httpmock.MustGetSubmatchAsUint(req, 1) // 1=first regexp submatch
-  			return httpmock.NewJsonResponse(200, map[string]interface{}{
+  			return httpmock.NewJsonResponse(http.StatusOK, map[string]interface{}{
   				"id":   id,
   				"name": "My Great Article",
   			})
@@ -58,18 +58,18 @@ Advanced Example:
   	)
 
   	// mock to add a new article
-  	httpmock.RegisterResponder("POST", "https://api.mybiz.com/articles",
+  	httpmock.RegisterResponder(http.MethodPost, "https://api.mybiz.com/articles",
   		func(req *http.Request) (*http.Response, error) {
   			article := make(map[string]interface{})
   			if err := json.NewDecoder(req.Body).Decode(&article); err != nil {
-  				return httpmock.NewStringResponse(400, ""), nil
+  				return httpmock.NewStringResponse(http.StatusBadRequest, ""), nil
   			}
 
   			articles = append(articles, article)
 
-  			resp, err := httpmock.NewJsonResponse(200, article)
+  			resp, err := httpmock.NewJsonResponse(http.StatusOK, article)
   			if err != nil {
-  				return httpmock.NewStringResponse(500, ""), nil
+  				return httpmock.NewStringResponse(http.StatusInternalServerError, ""), nil
   			}
   			return resp, nil
   		},
