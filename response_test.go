@@ -218,7 +218,6 @@ func TestRewindResponse(t *testing.T) {
 	}
 
 	for _, response := range responses {
-
 		data, err := ioutil.ReadAll(response.Body)
 		if err != nil {
 			t.Fatal(err)

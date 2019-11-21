@@ -72,9 +72,7 @@ func TestMockTransport(t *testing.T) {
 		}
 
 		// the http client wraps our NoResponderFound error, so we just try and match on text
-		if _, err := http.Get(testURL); !strings.Contains(err.Error(),
-			NoResponderFound.Error()) {
-
+		if _, err := http.Get(testURL); !strings.Contains(err.Error(), NoResponderFound.Error()) {
 			t.Fatal(err)
 		}
 	}()
