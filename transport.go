@@ -558,13 +558,24 @@ func (m *MockTransport) RegisterNoResponder(responder Responder) {
 	m.mu.Unlock()
 }
 
-// Reset removes all registered responders (including the no responder) from the MockTransport
+// Reset removes all registered responders (including the no
+// responder) from the MockTransport. It zeroes call counters too.
 func (m *MockTransport) Reset() {
 	m.mu.Lock()
 	m.responders = make(map[routeKey]Responder)
 	m.regexpResponders = nil
 	m.noResponder = nil
 	m.callCountInfo = make(map[routeKey]int)
+	m.totalCallCount = 0
+	m.mu.Unlock()
+}
+
+// ZeroCallCounters zeroes call counters without touching registered responders.
+func (m *MockTransport) ZeroCallCounters() {
+	m.mu.Lock()
+	for k := range m.callCountInfo {
+		m.callCountInfo[k] = 0
+	}
 	m.totalCallCount = 0
 	m.mu.Unlock()
 }
@@ -711,12 +722,19 @@ func Deactivate() {
 	}
 }
 
-// Reset will remove any registered mocks and return the mock environment to it's initial state.
+// Reset will remove any registered mocks and return the mock
+// environment to it's initial state. It zeroes call counters too.
 func Reset() {
 	DefaultTransport.Reset()
 }
 
-// DeactivateAndReset is just a convenience method for calling Deactivate() and then Reset()
+// ZeroCallCounters zeroes call counters without touching registered responders.
+func ZeroCallCounters() {
+	DefaultTransport.ZeroCallCounters()
+}
+
+// DeactivateAndReset is just a convenience method for calling Deactivate() and then Reset().
+//
 // Happy deferring!
 func DeactivateAndReset() {
 	Deactivate()

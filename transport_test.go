@@ -565,7 +565,7 @@ func TestMockTransportRespectsTimeout(t *testing.T) {
 	}
 }
 
-func TestMockTransportCallCount(t *testing.T) {
+func TestMockTransportCallCountReset(t *testing.T) {
 	Reset()
 	Activate()
 	defer Deactivate()
@@ -609,7 +609,7 @@ func TestMockTransportCallCount(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(info, expectedInfo) {
-		t.Fatalf("did not correctly track the call count info. expected it to be \n %+v \n but it was \n %+v \n", expectedInfo, info)
+		t.Fatalf("did not correctly track the call count info. expected it to be \n %+v\n but it was \n %+v", expectedInfo, info)
 	}
 
 	Reset()
@@ -617,6 +617,77 @@ func TestMockTransportCallCount(t *testing.T) {
 	afterResetTotalCallCount := GetTotalCallCount()
 	if afterResetTotalCallCount != 0 {
 		t.Fatalf("did not reset the total count of calls correctly. expected it to be 0 after reset, but it was %v", afterResetTotalCallCount)
+	}
+
+	info = GetCallCountInfo()
+	if !reflect.DeepEqual(info, map[string]int{}) {
+		t.Fatalf("did not correctly reset the call count info. expected it to be \n {}\n but it was \n %+v", info)
+	}
+}
+
+func TestMockTransportCallCountZero(t *testing.T) {
+	Reset()
+	Activate()
+	defer Deactivate()
+
+	const (
+		url  = "https://github.com/path?b=1&a=2"
+		url2 = "https://gitlab.com/"
+	)
+
+	RegisterResponder("GET", url, NewStringResponder(200, "body"))
+	RegisterResponder("POST", "=~gitlab", NewStringResponder(200, "body"))
+
+	_, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	buff := new(bytes.Buffer)
+	json.NewEncoder(buff).Encode("{}") // nolint: errcheck
+	_, err = http.Post(url2, "application/json", buff)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	totalCallCount := GetTotalCallCount()
+	if totalCallCount != 3 {
+		t.Fatalf("did not track the total count of calls correctly. expected it to be 3, but it was %v", totalCallCount)
+	}
+
+	info := GetCallCountInfo()
+	expectedInfo := map[string]int{
+		"GET " + url: 2,
+		// Regexp match generates 2 entries:
+		"POST " + url2:  1, // the matched call
+		"POST =~gitlab": 1, // the regexp responder
+	}
+
+	if !reflect.DeepEqual(info, expectedInfo) {
+		t.Fatalf("did not correctly track the call count info. expected it to be \n %+v\n but it was \n %+v", expectedInfo, info)
+	}
+
+	ZeroCallCounters()
+
+	afterResetTotalCallCount := GetTotalCallCount()
+	if afterResetTotalCallCount != 0 {
+		t.Fatalf("did not reset the total count of calls correctly. expected it to be 0 after reset, but it was %v", afterResetTotalCallCount)
+	}
+
+	info = GetCallCountInfo()
+	expectedInfo = map[string]int{
+		"GET " + url: 0,
+		// Regexp match generates 2 entries:
+		"POST " + url2:  0, // the matched call
+		"POST =~gitlab": 0, // the regexp responder
+	}
+	if !reflect.DeepEqual(info, expectedInfo) {
+		t.Fatalf("did not correctly reset the call count info. expected it to be \n %+v\n but it was \n %+v", expectedInfo, info)
 	}
 }
 
