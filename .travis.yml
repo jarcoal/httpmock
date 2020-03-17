@@ -16,7 +16,7 @@ matrix:
       env:
         - USE_LINTER=1
       install:
-        - wget -O - -q https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.18.0
+        - wget -O - -q https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.24.0
       after_success:
         - go get github.com/mattn/goveralls
         - goveralls -coverprofile=coverage.out -service=travis-ci
@@ -30,7 +30,7 @@ script:
   - go test -race -covermode=atomic -coverprofile=coverage.out ./...
   - >
     if [ "$USE_LINTER" = 1 ]; then
-      golangci-lint run -E gofmt -E golint -E maligned -E misspell -E prealloc -E unconvert ./...;
+      golangci-lint run -E gofmt -E golint -E maligned -E misspell -E prealloc -E unconvert -E whitespace ./...;
     fi
 
 notifications:
