@@ -214,7 +214,9 @@ import (
 // ...
 var _ = BeforeSuite(func() {
 	// block all HTTP requests
-	httpmock.ActivateNonDefault(resty.DefaultClient.GetClient())
+	httpmock.ActivateNonDefault(resty.New().GetClient())
+	// for resty v1
+	//httpmock.ActivateNonDefault(resty.DefaultClient.GetClient())
 })
 
 var _ = BeforeEach(func() {
