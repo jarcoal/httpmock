@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
+	"strings"
+	"sync"
 	"testing"
 )
 
@@ -339,4 +341,37 @@ func TestResponder(t *testing.T) {
 
 	chk(rt, resp, "")
 	chkCalled()
+}
+
+func TestParallelResponder(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, "http://foo.bar", nil)
+	if err != nil {
+		t.Fatal("Error creating request")
+	}
+
+	body := strings.Repeat("ABC-", 1000)
+
+	for _, r := range []Responder{
+		NewStringResponder(200, body),
+		NewBytesResponder(200, []byte(body)),
+	} {
+		var wg sync.WaitGroup
+		for i := 0; i < 100; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				resp, _ := r(req)
+				b, err := ioutil.ReadAll(resp.Body)
+				switch {
+				case err != nil:
+					t.Errorf("ReadAll error: %s", err)
+				case len(b) != 4000:
+					t.Errorf("ReadAll read only %d bytes", len(b))
+				case !strings.HasPrefix(string(b), "ABC-"):
+					t.Errorf("ReadAll does not read the right prefix: %s", string(b)[0:4])
+				}
+			}()
+		}
+		wg.Wait()
+	}
 }
