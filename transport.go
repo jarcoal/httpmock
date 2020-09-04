@@ -598,8 +598,8 @@ func (m *MockTransport) ZeroCallCounters() {
 //     `GET =~z\.com\z`: 1,
 //   }
 func (m *MockTransport) GetCallCountInfo() map[string]int {
-	res := make(map[string]int, len(m.callCountInfo))
 	m.mu.RLock()
+	res := make(map[string]int, len(m.callCountInfo))
 	for k, v := range m.callCountInfo {
 		res[k.String()] = v
 	}
