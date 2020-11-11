@@ -1,6 +1,5 @@
 language: go
 go_import_path: github.com/jarcoal/httpmock
-
 sudo: false
 
 matrix:
@@ -22,6 +21,28 @@ matrix:
         - go get github.com/mattn/goveralls
         - goveralls -coverprofile=coverage.out -service=travis-ci
     - go: master
+
+#Added power jobs
+    - go: 1.11.x
+      arch: ppc64le
+    - go: 1.12.x
+      arch: ppc64le
+    - go: 1.13.x
+      arch: ppc64le
+    - go: 1.14.x
+      arch: ppc64le
+    - go: 1.15.x
+      arch: ppc64le
+      env:
+        - USE_LINTER=1
+      install:
+        - wget -O - -q https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.30.0
+      after_success:
+        - go get github.com/mattn/goveralls
+        - goveralls -coverprofile=coverage.out -service=travis-ci
+    - go: master
+      arch: ppc64le
+
   allow_failures:
     - go: master
   fast_finish: true
