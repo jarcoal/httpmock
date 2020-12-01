@@ -17,7 +17,8 @@ import (
 
 const regexpPrefix = "=~"
 
-// NoResponderFound is returned when no responders are found for a given HTTP method and URL.
+// NoResponderFound is returned when no responders are found for a
+// given HTTP method and URL.
 var NoResponderFound = errors.New("no responder found") // nolint: golint
 
 type routeKey struct {
@@ -34,8 +35,9 @@ func (r routeKey) String() string {
 	return r.Method + " " + r.URL
 }
 
-// ConnectionFailure is a responder that returns a connection failure.  This is the default
-// responder, and is called when no other matching responder is found.
+// ConnectionFailure is a responder that returns a connection failure.
+// This is the default responder, and is called when no other matching
+// responder is found.
 func ConnectionFailure(*http.Request) (*http.Response, error) {
 	return nil, NoResponderFound
 }
@@ -55,9 +57,10 @@ type regexpResponder struct {
 	responder Responder
 }
 
-// MockTransport implements http.RoundTripper, which fulfills single http requests issued by
-// an http.Client.  This implementation doesn't actually make the call, instead deferring to
-// the registered list of responders.
+// MockTransport implements http.RoundTripper, which fulfills single
+// http requests issued by an http.Client.  This implementation
+// doesn't actually make the call, instead deferring to the registered
+// list of responders.
 type MockTransport struct {
 	mu               sync.RWMutex
 	responders       map[routeKey]Responder
@@ -67,9 +70,10 @@ type MockTransport struct {
 	totalCallCount   int
 }
 
-// RoundTrip receives HTTP requests and routes them to the appropriate responder.  It is required to
-// implement the http.RoundTripper interface.  You will not interact with this directly, instead
-// the *http.Client you are using will call it for you.
+// RoundTrip receives HTTP requests and routes them to the appropriate
+// responder.  It is required to implement the http.RoundTripper
+// interface.  You will not interact with this directly, instead the
+// *http.Client you are using will call it for you.
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	url := req.URL.String()
 
@@ -262,7 +266,7 @@ func (n stackTracer) Error() string {
 }
 
 // checkStackTracer checks for specific error returned by
-// NewNotFoundResponder function or Debug Responder method.
+// NewNotFoundResponder function or Trace Responder method.
 func checkStackTracer(req *http.Request, err error) error {
 	if nf, ok := err.(stackTracer); ok {
 		if nf.customFn != nil {
@@ -332,7 +336,8 @@ func (m *MockTransport) responderForKey(key routeKey) (Responder, routeKey, []st
 	return m.responders[key], key, nil
 }
 
-// responderForKeyUsingRegexp returns the first responder matching a given key using regexps.
+// responderForKeyUsingRegexp returns the first responder matching a
+// given key using regexps.
 func (m *MockTransport) regexpResponderForKey(key routeKey) (Responder, routeKey, []string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -361,8 +366,8 @@ func isRegexpURL(url string) bool {
 // RegisterResponder adds a new responder, associated with a given
 // HTTP method and URL (or path).
 //
-// When a request comes in that matches, the responder will be called
-// and the response returned to the client.
+// When a request comes in that matches, the responder is called and
+// the response returned to the client.
 //
 // If url contains query parameters, their order matters as well as
 // their content. All following URLs are here considered as different:
@@ -382,23 +387,23 @@ func isRegexpURL(url string) bool {
 // See RegisterRegexpResponder() to directly pass a *regexp.Regexp.
 //
 // Example:
-// 		func TestFetchArticles(t *testing.T) {
-// 			httpmock.Activate()
-// 			defer httpmock.DeactivateAndReset()
+//   func TestFetchArticles(t *testing.T) {
+//     httpmock.Activate()
+//     defer httpmock.DeactivateAndReset()
 //
-// 			httpmock.RegisterResponder("GET", "http://example.com/",
-// 				httpmock.NewStringResponder(200, "hello world"))
+//     httpmock.RegisterResponder("GET", "http://example.com/",
+//       httpmock.NewStringResponder(200, "hello world"))
 //
-// 			httpmock.RegisterResponder("GET", "/path/only",
-// 				httpmock.NewStringResponder("any host hello world", 200))
+//     httpmock.RegisterResponder("GET", "/path/only",
+//       httpmock.NewStringResponder("any host hello world", 200))
 //
-// 			httpmock.RegisterResponder("GET", `=~^/item/id/\d+\z`,
-// 				httpmock.NewStringResponder("any item get", 200))
+//     httpmock.RegisterResponder("GET", `=~^/item/id/\d+\z`,
+//       httpmock.NewStringResponder("any item get", 200))
 //
-// 			// requests to http://example.com/ will now return "hello world" and
-// 			// requests to any host with path /path/only will return "any host hello world"
-// 			// requests to any host with path matching ^/item/id/\d+\z regular expression will return "any item get"
-// 		}
+//     // requests to http://example.com/ now return "hello world" and
+//     // requests to any host with path /path/only return "any host hello world"
+//     // requests to any host with path matching ^/item/id/\d+\z regular expression return "any item get"
+//   }
 func (m *MockTransport) RegisterResponder(method, url string, responder Responder) {
 	if isRegexpURL(url) {
 		m.registerRegexpResponder(regexpResponder{
@@ -446,8 +451,8 @@ found:
 // RegisterRegexpResponder adds a new responder, associated with a given
 // HTTP method and URL (or path) regular expression.
 //
-// When a request comes in that matches, the responder will be called
-// and the response returned to the client.
+// When a request comes in that matches, the responder is called and
+// the response returned to the client.
 //
 // As 2 regexps can match the same URL, the regexp responders are
 // tested in the order they are registered. Registering an already
@@ -550,8 +555,8 @@ func sortedQuery(m url.Values) string {
 	return b.String()
 }
 
-// RegisterNoResponder is used to register a responder that will be called if no other responder is
-// found.  The default is ConnectionFailure.
+// RegisterNoResponder is used to register a responder that is called
+// if no other responder is found.  The default is httpmock.ConnectionFailure.
 func (m *MockTransport) RegisterNoResponder(responder Responder) {
 	m.mu.Lock()
 	m.noResponder = responder
@@ -594,8 +599,8 @@ func (m *MockTransport) ZeroCallCounters() {
 //
 // will generate the following result:
 //   map[string]int{
-//     `GET http://z.com`:  1,
-//     `GET =~z\.com\z`: 1,
+//     `GET http://z.com`: 1,
+//     `GET =~z\.com\z`:   1,
 //   }
 func (m *MockTransport) GetCallCountInfo() map[string]int {
 	m.mu.RLock()
@@ -615,37 +620,47 @@ func (m *MockTransport) GetTotalCallCount() int {
 	return count
 }
 
-// DefaultTransport is the default mock transport used by Activate, Deactivate, Reset,
-// DeactivateAndReset, RegisterResponder, and RegisterNoResponder.
+// DefaultTransport is the default mock transport used by Activate,
+// Deactivate, Reset, DeactivateAndReset, RegisterResponder, and
+// RegisterNoResponder.
 var DefaultTransport = NewMockTransport()
 
-// InitialTransport is a cache of the original transport used so we can put it back
-// when Deactivate is called.
+// InitialTransport is a cache of the original transport used so we
+// can put it back when Deactivate is called.
 var InitialTransport = http.DefaultTransport
 
-// Used to handle custom http clients (i.e clients other than http.DefaultClient)
+// oldClients is used to handle custom http clients (i.e clients other
+// than http.DefaultClient)
 var oldClients = map[*http.Client]http.RoundTripper{}
 
-// Activate starts the mock environment.  This should be called before your tests run.  Under the
-// hood this replaces the Transport on the http.DefaultClient with DefaultTransport.
+// Activate starts the mock environment.  This should be called before
+// your tests run.  Under the hood this replaces the Transport on the
+// http.DefaultClient with httpmock.DefaultTransport.
 //
 // To enable mocks for a test, simply activate at the beginning of a test:
-// 		func TestFetchArticles(t *testing.T) {
-// 			httpmock.Activate()
-// 			// all http requests will now be intercepted
-// 		}
+//   func TestFetchArticles(t *testing.T) {
+//     httpmock.Activate()
+//     // all http requests using http.DefaultTransport will now be intercepted
+//   }
 //
-// If you want all of your tests in a package to be mocked, just call Activate from init():
-// 		func init() {
-// 			httpmock.Activate()
-// 		}
+// If you want all of your tests in a package to be mocked, just call
+// Activate from init():
+//   func init() {
+//     httpmock.Activate()
+//   }
+//
+// or using a TestMain function:
+//   func TestMain(m *testing.M) {
+//     httpmock.Activate()
+//     os.Exit(m.Run())
+//   }
 func Activate() {
 	if Disabled() {
 		return
 	}
 
-	// make sure that if Activate is called multiple times it doesn't overwrite the InitialTransport
-	// with a mock transport.
+	// make sure that if Activate is called multiple times it doesn't
+	// overwrite the InitialTransport with a mock transport.
 	if http.DefaultTransport != DefaultTransport {
 		InitialTransport = http.DefaultTransport
 	}
@@ -653,13 +668,14 @@ func Activate() {
 	http.DefaultTransport = DefaultTransport
 }
 
-// ActivateNonDefault starts the mock environment with a non-default http.Client.
-// This emulates the Activate function, but allows for custom clients that do not use
-// http.DefaultTransport
+// ActivateNonDefault starts the mock environment with a non-default
+// http.Client.  This emulates the Activate function, but allows for
+// custom clients that do not use http.DefaultTransport
 //
-// To enable mocks for a test using a custom client, activate at the beginning of a test:
-// 		client := &http.Client{Transport: &http.Transport{TLSHandshakeTimeout: 60 * time.Second}}
-// 		httpmock.ActivateNonDefault(client)
+// To enable mocks for a test using a custom client, activate at the
+// beginning of a test:
+//   client := &http.Client{Transport: &http.Transport{TLSHandshakeTimeout: 60 * time.Second}}
+//   httpmock.ActivateNonDefault(client)
 func ActivateNonDefault(client *http.Client) {
 	if Disabled() {
 		return
@@ -686,29 +702,40 @@ func ActivateNonDefault(client *http.Client) {
 //
 // will generate the following result:
 //   map[string]int{
-//     `GET http://z.com`:  1,
-//     `GET =~z\.com\z`: 1,
+//     `GET http://z.com`: 1,
+//     `GET =~z\.com\z`:   1,
 //   }
 func GetCallCountInfo() map[string]int {
 	return DefaultTransport.GetCallCountInfo()
 }
 
-// GetTotalCallCount gets the total number of calls httpmock has taken since it was activated or
-// reset.
+// GetTotalCallCount gets the total number of calls httpmock has taken
+// since it was activated or reset.
 func GetTotalCallCount() int {
 	return DefaultTransport.GetTotalCallCount()
 }
 
-// Deactivate shuts down the mock environment.  Any HTTP calls made after this will use a live
-// transport.
+// Deactivate shuts down the mock environment.  Any HTTP calls made
+// after this will use a live transport.
 //
-// Usually you'll call it in a defer right after activating the mock environment:
-// 		func TestFetchArticles(t *testing.T) {
-// 			httpmock.Activate()
-// 			defer httpmock.Deactivate()
+// Usually you'll call it in a defer right after activating the mock
+// environment:
+//   func TestFetchArticles(t *testing.T) {
+//     httpmock.Activate()
+//     defer httpmock.Deactivate()
 //
-// 			// when this test ends, the mock environment will close
-// 		}
+//     // when this test ends, the mock environment will close
+//   }
+//
+// Since go 1.14 you can also use (*testing.T).Cleanup() method as in:
+//   func TestFetchArticles(t *testing.T) {
+//     httpmock.Activate()
+//     t.Cleanup(httpmock.Deactivate)
+//
+//     // when this test ends, the mock environment will close
+//   }
+//
+// useful in test helpers to save your callers from calling defer themselves.
 func Deactivate() {
 	if Disabled() {
 		return
@@ -722,8 +749,8 @@ func Deactivate() {
 	}
 }
 
-// Reset will remove any registered mocks and return the mock
-// environment to it's initial state. It zeroes call counters too.
+// Reset removes any registered mocks and returns the mock
+// environment to its initial state. It zeroes call counters too.
 func Reset() {
 	DefaultTransport.Reset()
 }
@@ -733,7 +760,8 @@ func ZeroCallCounters() {
 	DefaultTransport.ZeroCallCounters()
 }
 
-// DeactivateAndReset is just a convenience method for calling Deactivate() and then Reset().
+// DeactivateAndReset is just a convenience method for calling
+// Deactivate() and then Reset().
 //
 // Happy deferring!
 func DeactivateAndReset() {
@@ -744,8 +772,8 @@ func DeactivateAndReset() {
 // RegisterResponder adds a new responder, associated with a given
 // HTTP method and URL (or path).
 //
-// When a request comes in that matches, the responder will be called
-// and the response returned to the client.
+// When a request comes in that matches, the responder is called and
+// the response returned to the client.
 //
 // If url contains query parameters, their order matters as well as
 // their content. All following URLs are here considered as different:
@@ -765,23 +793,23 @@ func DeactivateAndReset() {
 // See RegisterRegexpResponder() to directly pass a *regexp.Regexp.
 //
 // Example:
-// 		func TestFetchArticles(t *testing.T) {
-// 			httpmock.Activate()
-// 			defer httpmock.DeactivateAndReset()
+//   func TestFetchArticles(t *testing.T) {
+//     httpmock.Activate()
+//     defer httpmock.DeactivateAndReset()
 //
-// 			httpmock.RegisterResponder("GET", "http://example.com/",
-// 				httpmock.NewStringResponder(200, "hello world"))
+//     httpmock.RegisterResponder("GET", "http://example.com/",
+//       httpmock.NewStringResponder(200, "hello world"))
 //
-// 			httpmock.RegisterResponder("GET", "/path/only",
-// 				httpmock.NewStringResponder("any host hello world", 200))
+//     httpmock.RegisterResponder("GET", "/path/only",
+//       httpmock.NewStringResponder("any host hello world", 200))
 //
-// 			httpmock.RegisterResponder("GET", `=~^/item/id/\d+\z`,
-// 				httpmock.NewStringResponder("any item get", 200))
+//     httpmock.RegisterResponder("GET", `=~^/item/id/\d+\z`,
+//       httpmock.NewStringResponder("any item get", 200))
 //
-// 			// requests to http://example.com/ will now return "hello world" and
-// 			// requests to any host with path /path/only will return "any host hello world"
-// 			// requests to any host with path matching ^/item/id/\d+\z regular expression will return "any item get"
-// 		}
+//     // requests to http://example.com/ now return "hello world" and
+//     // requests to any host with path /path/only return "any host hello world"
+//     // requests to any host with path matching ^/item/id/\d+\z regular expression return "any item get"
+//   }
 func RegisterResponder(method, url string, responder Responder) {
 	DefaultTransport.RegisterResponder(method, url, responder)
 }
@@ -789,8 +817,8 @@ func RegisterResponder(method, url string, responder Responder) {
 // RegisterRegexpResponder adds a new responder, associated with a given
 // HTTP method and URL (or path) regular expression.
 //
-// When a request comes in that matches, the responder will be called
-// and the response returned to the client.
+// When a request comes in that matches, the responder is called and
+// the response returned to the client.
 //
 // As 2 regexps can match the same URL, the regexp responders are
 // tested in the order they are registered. Registering an already
@@ -818,65 +846,70 @@ func RegisterRegexpResponder(method string, urlRegexp *regexp.Regexp, responder 
 // using net/url.ParseQuery, a panic() occurs.
 //
 // Example using a net/url.Values:
-// 		func TestFetchArticles(t *testing.T) {
-// 			httpmock.Activate()
-// 			defer httpmock.DeactivateAndReset()
+//   func TestFetchArticles(t *testing.T) {
+//     httpmock.Activate()
+//     defer httpmock.DeactivateAndReset()
 //
-// 			expectedQuery := net.Values{
-// 				"a": []string{"3", "1", "8"},
-//				"b": []string{"4", "2"},
-//			}
-// 			httpmock.RegisterResponderWithQueryValues("GET", "http://example.com/", expectedQuery,
-// 				httpmock.NewStringResponder("hello world", 200))
+//     expectedQuery := net.Values{
+//       "a": []string{"3", "1", "8"},
+//       "b": []string{"4", "2"},
+//     }
+//     httpmock.RegisterResponderWithQueryValues(
+//       "GET", "http://example.com/", expectedQuery,
+//       httpmock.NewStringResponder("hello world", 200))
 //
-//			// requests to http://example.com?a=1&a=3&a=8&b=2&b=4
-//			//      and to http://example.com?b=4&a=2&b=2&a=8&a=1
-//			// will now return 'hello world'
-// 		}
+//     // requests to http://example.com?a=1&a=3&a=8&b=2&b=4
+//     //      and to http://example.com?b=4&a=2&b=2&a=8&a=1
+//     // now return 'hello world'
+//   }
 //
 // or using a map[string]string:
-// 		func TestFetchArticles(t *testing.T) {
-// 			httpmock.Activate()
-// 			defer httpmock.DeactivateAndReset()
+//   func TestFetchArticles(t *testing.T) {
+//     httpmock.Activate()
+//     defer httpmock.DeactivateAndReset()
 //
-// 			expectedQuery := map[string]string{
-//				"a": "1",
-//				"b": "2"
-//			}
-// 			httpmock.RegisterResponderWithQuery("GET", "http://example.com/", expectedQuery,
-// 				httpmock.NewStringResponder("hello world", 200))
+//     expectedQuery := map[string]string{
+//       "a": "1",
+//       "b": "2"
+//     }
+//     httpmock.RegisterResponderWithQuery(
+//       "GET", "http://example.com/", expectedQuery,
+//       httpmock.NewStringResponder("hello world", 200))
 //
-//			// requests to http://example.com?a=1&b=2 and http://example.com?b=2&a=1 will now return 'hello world'
-// 		}
+//     // requests to http://example.com?a=1&b=2 and http://example.com?b=2&a=1 now return 'hello world'
+//   }
 //
 // or using a query string:
-// 		func TestFetchArticles(t *testing.T) {
-// 			httpmock.Activate()
-// 			defer httpmock.DeactivateAndReset()
+//   func TestFetchArticles(t *testing.T) {
+//     httpmock.Activate()
+//     defer httpmock.DeactivateAndReset()
 //
-// 			expectedQuery := "a=3&b=4&b=2&a=1&a=8"
-// 			httpmock.RegisterResponderWithQueryValues("GET", "http://example.com/", expectedQuery,
-// 				httpmock.NewStringResponder("hello world", 200))
+//     expectedQuery := "a=3&b=4&b=2&a=1&a=8"
+//     httpmock.RegisterResponderWithQueryValues(
+//       "GET", "http://example.com/", expectedQuery,
+//       httpmock.NewStringResponder("hello world", 200))
 //
-//			// requests to http://example.com?a=1&a=3&a=8&b=2&b=4
-//			//      and to http://example.com?b=4&a=2&b=2&a=8&a=1
-//			// will now return 'hello world'
-// 		}
+//     // requests to http://example.com?a=1&a=3&a=8&b=2&b=4
+//     //      and to http://example.com?b=4&a=2&b=2&a=8&a=1
+//     // now return 'hello world'
+//   }
 func RegisterResponderWithQuery(method, path string, query interface{}, responder Responder) {
 	DefaultTransport.RegisterResponderWithQuery(method, path, query, responder)
 }
 
-// RegisterNoResponder adds a mock that will be called whenever a request for an unregistered URL
-// is received.  The default behavior is to return a connection error.
+// RegisterNoResponder adds a mock that is called whenever a request
+// for an unregistered URL is received.  The default behavior is to
+// return a connection error.
 //
-// In some cases you may not want all URLs to be mocked, in which case you can do this:
-// 		func TestFetchArticles(t *testing.T) {
-// 			httpmock.Activate()
-// 			defer httpmock.DeactivateAndReset()
-//			httpmock.RegisterNoResponder(httpmock.InitialTransport.RoundTrip)
+// In some cases you may not want all URLs to be mocked, in which case
+// you can do this:
+//   func TestFetchArticles(t *testing.T) {
+//     httpmock.Activate()
+//     defer httpmock.DeactivateAndReset()
+//     httpmock.RegisterNoResponder(httpmock.InitialTransport.RoundTrip)
 //
-// 			// any requests that don't have a registered URL will be fetched normally
-// 		}
+//     // any requests that don't have a registered URL will be fetched normally
+//   }
 func RegisterNoResponder(responder Responder) {
 	DefaultTransport.RegisterNoResponder(responder)
 }
@@ -900,17 +933,17 @@ var ErrSubmatchNotFound = errors.New("submatch not found")
 // RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
 // allows to retrieve the n-th submatch of the matching regexp, as a
 // string. Example:
-// 	RegisterResponder("GET", `=~^/item/name/([^/]+)\z`,
-// 		func(req *http.Request) (*http.Response, error) {
-// 			name, err := GetSubmatch(req, 1) // 1=first regexp submatch
-// 			if err != nil {
-// 				return nil, err
-// 			}
-// 			return NewJsonResponse(200, map[string]interface{}{
-// 				"id":   123,
-// 				"name": name,
-// 			})
-// 		})
+//   RegisterResponder("GET", `=~^/item/name/([^/]+)\z`,
+//     func(req *http.Request) (*http.Response, error) {
+//       name, err := GetSubmatch(req, 1) // 1=first regexp submatch
+//       if err != nil {
+//         return nil, err
+//       }
+//       return NewJsonResponse(200, map[string]interface{}{
+//         "id":   123,
+//         "name": name,
+//       })
+//     })
 //
 // It panics if n < 1. See MustGetSubmatch to avoid testing the
 // returned error.
@@ -931,17 +964,17 @@ func GetSubmatch(req *http.Request, n int) (string, error) {
 // RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
 // allows to retrieve the n-th submatch of the matching regexp, as an
 // int64. Example:
-// 	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
-// 		func(req *http.Request) (*http.Response, error) {
-// 			id, err := GetSubmatchAsInt(req, 1) // 1=first regexp submatch
-// 			if err != nil {
-// 				return nil, err
-// 			}
-// 			return NewJsonResponse(200, map[string]interface{}{
-// 				"id":   id,
-// 				"name": "The beautiful name",
-// 			})
-// 		})
+//   RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
+//     func(req *http.Request) (*http.Response, error) {
+//       id, err := GetSubmatchAsInt(req, 1) // 1=first regexp submatch
+//       if err != nil {
+//         return nil, err
+//       }
+//       return NewJsonResponse(200, map[string]interface{}{
+//         "id":   id,
+//         "name": "The beautiful name",
+//       })
+//     })
 //
 // It panics if n < 1. See MustGetSubmatchAsInt to avoid testing the
 // returned error.
@@ -957,17 +990,17 @@ func GetSubmatchAsInt(req *http.Request, n int) (int64, error) {
 // RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
 // allows to retrieve the n-th submatch of the matching regexp, as a
 // uint64. Example:
-// 	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
-// 		func(req *http.Request) (*http.Response, error) {
-// 			id, err := GetSubmatchAsUint(req, 1) // 1=first regexp submatch
-// 			if err != nil {
-// 				return nil, err
-// 			}
-// 			return NewJsonResponse(200, map[string]interface{}{
-// 				"id":   id,
-// 				"name": "The beautiful name",
-// 			})
-// 		})
+//   RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
+//     func(req *http.Request) (*http.Response, error) {
+//       id, err := GetSubmatchAsUint(req, 1) // 1=first regexp submatch
+//       if err != nil {
+//         return nil, err
+//       }
+//       return NewJsonResponse(200, map[string]interface{}{
+//         "id":   id,
+//         "name": "The beautiful name",
+//       })
+//     })
 //
 // It panics if n < 1. See MustGetSubmatchAsUint to avoid testing the
 // returned error.
@@ -983,18 +1016,18 @@ func GetSubmatchAsUint(req *http.Request, n int) (uint64, error) {
 // RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
 // allows to retrieve the n-th submatch of the matching regexp, as a
 // float64. Example:
-// 	RegisterResponder("PATCH", `=~^/item/id/\d+\?height=(\d+(?:\.\d*)?)\z`,
-// 		func(req *http.Request) (*http.Response, error) {
-// 			height, err := GetSubmatchAsFloat(req, 1) // 1=first regexp submatch
-// 			if err != nil {
-// 				return nil, err
-// 			}
-// 			return NewJsonResponse(200, map[string]interface{}{
-// 				"id":     id,
-// 				"name":   "The beautiful name",
-// 				"height": height,
-// 			})
-// 		})
+//   RegisterResponder("PATCH", `=~^/item/id/\d+\?height=(\d+(?:\.\d*)?)\z`,
+//     func(req *http.Request) (*http.Response, error) {
+//       height, err := GetSubmatchAsFloat(req, 1) // 1=first regexp submatch
+//       if err != nil {
+//         return nil, err
+//       }
+//       return NewJsonResponse(200, map[string]interface{}{
+//         "id":     id,
+//         "name":   "The beautiful name",
+//         "height": height,
+//       })
+//     })
 //
 // It panics if n < 1. See MustGetSubmatchAsFloat to avoid testing the
 // returned error.
@@ -1011,14 +1044,14 @@ func GetSubmatchAsFloat(req *http.Request, n int) (float64, error) {
 // installed by RegisterRegexpResponder or RegisterResponder + "=~"
 // URL prefix. It allows to retrieve the n-th submatch of the matching
 // regexp, as a string. Example:
-// 	RegisterResponder("GET", `=~^/item/name/([^/]+)\z`,
-// 		func(req *http.Request) (*http.Response, error) {
-// 			name := MustGetSubmatch(req, 1) // 1=first regexp submatch
-// 			return NewJsonResponse(200, map[string]interface{}{
-// 				"id":   123,
-// 				"name": name,
-// 			})
-// 		})
+//   RegisterResponder("GET", `=~^/item/name/([^/]+)\z`,
+//     func(req *http.Request) (*http.Response, error) {
+//       name := MustGetSubmatch(req, 1) // 1=first regexp submatch
+//       return NewJsonResponse(200, map[string]interface{}{
+//         "id":   123,
+//         "name": name,
+//       })
+//     })
 //
 // It panics if n < 1.
 func MustGetSubmatch(req *http.Request, n int) string {
@@ -1035,14 +1068,14 @@ func MustGetSubmatch(req *http.Request, n int) string {
 // RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
 // allows to retrieve the n-th submatch of the matching regexp, as an
 // int64. Example:
-// 	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
-// 		func(req *http.Request) (*http.Response, error) {
-// 			id := MustGetSubmatchAsInt(req, 1) // 1=first regexp submatch
-// 			return NewJsonResponse(200, map[string]interface{}{
-// 				"id":   id,
-// 				"name": "The beautiful name",
-// 			})
-// 		})
+//   RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
+//     func(req *http.Request) (*http.Response, error) {
+//       id := MustGetSubmatchAsInt(req, 1) // 1=first regexp submatch
+//       return NewJsonResponse(200, map[string]interface{}{
+//         "id":   id,
+//         "name": "The beautiful name",
+//       })
+//     })
 //
 // It panics if n < 1.
 func MustGetSubmatchAsInt(req *http.Request, n int) int64 {
@@ -1059,14 +1092,14 @@ func MustGetSubmatchAsInt(req *http.Request, n int) int64 {
 // RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
 // allows to retrieve the n-th submatch of the matching regexp, as a
 // uint64. Example:
-// 	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
-// 		func(req *http.Request) (*http.Response, error) {
-// 			id, err := MustGetSubmatchAsUint(req, 1) // 1=first regexp submatch
-// 			return NewJsonResponse(200, map[string]interface{}{
-// 				"id":   id,
-// 				"name": "The beautiful name",
-// 			})
-// 		})
+//   RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
+//     func(req *http.Request) (*http.Response, error) {
+//       id, err := MustGetSubmatchAsUint(req, 1) // 1=first regexp submatch
+//       return NewJsonResponse(200, map[string]interface{}{
+//         "id":   id,
+//         "name": "The beautiful name",
+//       })
+//     })
 //
 // It panics if n < 1.
 func MustGetSubmatchAsUint(req *http.Request, n int) uint64 {
@@ -1083,15 +1116,15 @@ func MustGetSubmatchAsUint(req *http.Request, n int) uint64 {
 // RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
 // allows to retrieve the n-th submatch of the matching regexp, as a
 // float64. Example:
-// 	RegisterResponder("PATCH", `=~^/item/id/\d+\?height=(\d+(?:\.\d*)?)\z`,
-// 		func(req *http.Request) (*http.Response, error) {
-// 			height := MustGetSubmatchAsFloat(req, 1) // 1=first regexp submatch
-// 			return NewJsonResponse(200, map[string]interface{}{
-// 				"id":     id,
-// 				"name":   "The beautiful name",
-// 				"height": height,
-// 			})
-// 		})
+//   RegisterResponder("PATCH", `=~^/item/id/\d+\?height=(\d+(?:\.\d*)?)\z`,
+//     func(req *http.Request) (*http.Response, error) {
+//       height := MustGetSubmatchAsFloat(req, 1) // 1=first regexp submatch
+//       return NewJsonResponse(200, map[string]interface{}{
+//         "id":     id,
+//         "name":   "The beautiful name",
+//         "height": height,
+//       })
+//     })
 //
 // It panics if n < 1.
 func MustGetSubmatchAsFloat(req *http.Request, n int) float64 {
