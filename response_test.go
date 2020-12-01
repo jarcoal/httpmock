@@ -1,4 +1,4 @@
-package httpmock
+package httpmock_test
 
 import (
 	"encoding/json"
@@ -9,6 +9,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	. "github.com/jarcoal/httpmock"
+	"github.com/jarcoal/httpmock/internal"
 )
 
 func TestResponderFromResponse(t *testing.T) {
@@ -69,10 +72,10 @@ func TestNewNotFoundResponder(t *testing.T) {
 	} else if err.Error() != title {
 		t.Errorf(`err mismatch, got: "%s", expected: "%s"`,
 			err, "Responder not found for: GET http://foo.bar/path")
-	} else if ne, ok := err.(stackTracer); !ok {
+	} else if ne, ok := err.(internal.StackTracer); !ok {
 		t.Errorf(`err type mismatch, got %T, expected httpmock.notFound`, err)
-	} else if ne.customFn == nil {
-		t.Error(`err customFn mismatch, got: nil, expected: non-nil`)
+	} else if ne.CustomFn == nil {
+		t.Error(`err CustomFn mismatch, got: nil, expected: non-nil`)
 	}
 
 	// nil fn
@@ -87,10 +90,10 @@ func TestNewNotFoundResponder(t *testing.T) {
 	} else if err.Error() != title {
 		t.Errorf(`err mismatch, got: "%s", expected: "%s"`,
 			err, "Responder not found for: GET http://foo.bar/path")
-	} else if ne, ok := err.(stackTracer); !ok {
+	} else if ne, ok := err.(internal.StackTracer); !ok {
 		t.Errorf(`err type mismatch, got %T, expected httpmock.notFound`, err)
-	} else if ne.customFn != nil {
-		t.Errorf(`err customFn mismatch, got: %p, expected: nil`, ne.customFn)
+	} else if ne.CustomFn != nil {
+		t.Errorf(`err CustomFn mismatch, got: %p, expected: nil`, ne.CustomFn)
 	}
 }
 

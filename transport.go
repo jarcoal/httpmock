@@ -2,17 +2,17 @@ package httpmock
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/jarcoal/httpmock/internal"
 )
 
 const regexpPrefix = "=~"
@@ -20,20 +20,6 @@ const regexpPrefix = "=~"
 // NoResponderFound is returned when no responders are found for a
 // given HTTP method and URL.
 var NoResponderFound = errors.New("no responder found") // nolint: golint
-
-type routeKey struct {
-	Method string
-	URL    string
-}
-
-var noResponder routeKey
-
-func (r routeKey) String() string {
-	if r == noResponder {
-		return "NO_RESPONDER"
-	}
-	return r.Method + " " + r.URL
-}
 
 // ConnectionFailure is a responder that returns a connection failure.
 // This is the default responder, and is called when no other matching
@@ -45,8 +31,8 @@ func ConnectionFailure(*http.Request) (*http.Response, error) {
 // NewMockTransport creates a new *MockTransport with no responders.
 func NewMockTransport() *MockTransport {
 	return &MockTransport{
-		responders:    make(map[routeKey]Responder),
-		callCountInfo: make(map[routeKey]int),
+		responders:    make(map[internal.RouteKey]Responder),
+		callCountInfo: make(map[internal.RouteKey]int),
 	}
 }
 
@@ -63,10 +49,10 @@ type regexpResponder struct {
 // list of responders.
 type MockTransport struct {
 	mu               sync.RWMutex
-	responders       map[routeKey]Responder
+	responders       map[internal.RouteKey]Responder
 	regexpResponders []regexpResponder
 	noResponder      Responder
-	callCountInfo    map[routeKey]int
+	callCountInfo    map[internal.RouteKey]int
 	totalCallCount   int
 }
 
@@ -85,13 +71,13 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	var (
 		responder  Responder
-		respKey    routeKey
+		respKey    internal.RouteKey
 		submatches []string
 	)
-	key := routeKey{
+	key := internal.RouteKey{
 		Method: method,
 	}
-	for _, getResponder := range []func(routeKey) (Responder, routeKey, []string){
+	for _, getResponder := range []func(internal.RouteKey) (Responder, internal.RouteKey, []string){
 		m.responderForKey,       // Exact match
 		m.regexpResponderForKey, // Regexp match
 	} {
@@ -179,7 +165,7 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	} else {
 		// we didn't find a responder, so fire the 'no responder' responder
 		if m.noResponder != nil {
-			m.callCountInfo[noResponder]++
+			m.callCountInfo[internal.NoResponder]++
 			m.totalCallCount++
 			responder = m.noResponder
 		}
@@ -189,14 +175,21 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if responder == nil {
 		return ConnectionFailure(req)
 	}
-	return runCancelable(responder, setSubmatches(req, submatches))
+	return runCancelable(responder, internal.SetSubmatches(req, submatches))
+}
+
+// NumResponders
+func (m *MockTransport) NumResponders() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.responders) + len(m.regexpResponders)
 }
 
 func runCancelable(responder Responder, req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 	if req.Cancel == nil && ctx.Done() == nil { // nolint: staticcheck
 		resp, err := responder(req)
-		return resp, checkStackTracer(req, err)
+		return resp, internal.CheckStackTracer(req, err)
 	}
 
 	// Set up a goroutine that translates a close(req.Cancel) into a
@@ -250,87 +243,11 @@ func runCancelable(responder Responder, req *http.Request) (*http.Response, erro
 	// first goroutine.
 	done <- struct{}{}
 
-	return r.response, checkStackTracer(req, r.err)
-}
-
-type stackTracer struct {
-	customFn func(...interface{})
-	err      error
-}
-
-func (n stackTracer) Error() string {
-	if n.err == nil {
-		return ""
-	}
-	return n.err.Error()
-}
-
-// checkStackTracer checks for specific error returned by
-// NewNotFoundResponder function or Trace Responder method.
-func checkStackTracer(req *http.Request, err error) error {
-	if nf, ok := err.(stackTracer); ok {
-		if nf.customFn != nil {
-			pc := make([]uintptr, 128)
-			npc := runtime.Callers(2, pc)
-			pc = pc[:npc]
-
-			var mesg bytes.Buffer
-			var netHTTPBegin, netHTTPEnd bool
-
-			// Start recording at first net/http call if any...
-			for {
-				frames := runtime.CallersFrames(pc)
-
-				var lastFn string
-				for {
-					frame, more := frames.Next()
-
-					if !netHTTPEnd {
-						if netHTTPBegin {
-							netHTTPEnd = !strings.HasPrefix(frame.Function, "net/http.")
-						} else {
-							netHTTPBegin = strings.HasPrefix(frame.Function, "net/http.")
-						}
-					}
-
-					if netHTTPEnd {
-						if lastFn != "" {
-							if mesg.Len() == 0 {
-								if nf.err != nil {
-									mesg.WriteString(nf.err.Error())
-								} else {
-									fmt.Fprintf(&mesg, "%s %s", req.Method, req.URL)
-								}
-								mesg.WriteString("\nCalled from ")
-							} else {
-								mesg.WriteString("\n  ")
-							}
-							fmt.Fprintf(&mesg, "%s()\n    at %s:%d", lastFn, frame.File, frame.Line)
-						}
-					}
-					lastFn = frame.Function
-
-					if !more {
-						break
-					}
-				}
-
-				// At least one net/http frame found
-				if mesg.Len() > 0 {
-					break
-				}
-				netHTTPEnd = true // retry without looking at net/http frames
-			}
-
-			nf.customFn(mesg.String())
-		}
-		err = nf.err
-	}
-	return err
+	return r.response, internal.CheckStackTracer(req, r.err)
 }
 
 // responderForKey returns a responder for a given key.
-func (m *MockTransport) responderForKey(key routeKey) (Responder, routeKey, []string) {
+func (m *MockTransport) responderForKey(key internal.RouteKey) (Responder, internal.RouteKey, []string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.responders[key], key, nil
@@ -338,7 +255,7 @@ func (m *MockTransport) responderForKey(key routeKey) (Responder, routeKey, []st
 
 // responderForKeyUsingRegexp returns the first responder matching a
 // given key using regexps.
-func (m *MockTransport) regexpResponderForKey(key routeKey) (Responder, routeKey, []string) {
+func (m *MockTransport) regexpResponderForKey(key internal.RouteKey) (Responder, internal.RouteKey, []string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for _, regInfo := range m.regexpResponders {
@@ -349,7 +266,7 @@ func (m *MockTransport) regexpResponderForKey(key routeKey) (Responder, routeKey
 				} else {
 					sm = sm[1:]
 				}
-				return regInfo.responder, routeKey{
+				return regInfo.responder, internal.RouteKey{
 					Method: key.Method,
 					URL:    regInfo.origRx,
 				}, sm
@@ -415,7 +332,7 @@ func (m *MockTransport) RegisterResponder(method, url string, responder Responde
 		return
 	}
 
-	key := routeKey{
+	key := internal.RouteKey{
 		Method: method,
 		URL:    url,
 	}
@@ -442,7 +359,7 @@ found:
 		break // nolint: staticcheck
 	}
 
-	m.callCountInfo[routeKey{
+	m.callCountInfo[internal.RouteKey{
 		Method: regexpResponder.method,
 		URL:    regexpResponder.origRx,
 	}] = 0
@@ -567,10 +484,10 @@ func (m *MockTransport) RegisterNoResponder(responder Responder) {
 // responder) from the MockTransport. It zeroes call counters too.
 func (m *MockTransport) Reset() {
 	m.mu.Lock()
-	m.responders = make(map[routeKey]Responder)
+	m.responders = make(map[internal.RouteKey]Responder)
 	m.regexpResponders = nil
 	m.noResponder = nil
-	m.callCountInfo = make(map[routeKey]int)
+	m.callCountInfo = make(map[internal.RouteKey]int)
 	m.totalCallCount = 0
 	m.mu.Unlock()
 }
@@ -914,17 +831,6 @@ func RegisterNoResponder(responder Responder) {
 	DefaultTransport.RegisterNoResponder(responder)
 }
 
-type submatchesKeyType struct{}
-
-var submatchesKey submatchesKeyType
-
-func setSubmatches(req *http.Request, submatches []string) *http.Request {
-	if len(submatches) > 0 {
-		return req.WithContext(context.WithValue(req.Context(), submatchesKey, submatches))
-	}
-	return req
-}
-
 // ErrSubmatchNotFound is the error returned by GetSubmatch* functions
 // when the given submatch index cannot be found.
 var ErrSubmatchNotFound = errors.New("submatch not found")
@@ -953,8 +859,8 @@ func GetSubmatch(req *http.Request, n int) (string, error) {
 	}
 	n--
 
-	submatches, ok := req.Context().Value(submatchesKey).([]string)
-	if !ok || n >= len(submatches) {
+	submatches := internal.GetSubmatches(req)
+	if n >= len(submatches) {
 		return "", ErrSubmatchNotFound
 	}
 	return submatches[n], nil

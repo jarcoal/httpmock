@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/jarcoal/httpmock/internal"
 )
 
 // Responder is a callback that receives an http request and returns
@@ -20,11 +22,11 @@ func (r Responder) times(name string, n int, fn ...func(...interface{})) Respond
 	return func(req *http.Request) (*http.Response, error) {
 		count++
 		if count > n {
-			err := stackTracer{
-				err: fmt.Errorf("Responder not found for %s %s (coz %s and already called %d times)", req.Method, req.URL, name, count),
+			err := internal.StackTracer{
+				Err: fmt.Errorf("Responder not found for %s %s (coz %s and already called %d times)", req.Method, req.URL, name, count),
 			}
 			if len(fn) > 0 {
-				err.customFn = fn[0]
+				err.CustomFn = fn[0]
 			}
 			return nil, err
 		}
@@ -91,9 +93,9 @@ func (r Responder) Once(fn ...func(...interface{})) Responder {
 func (r Responder) Trace(fn func(...interface{})) Responder {
 	return func(req *http.Request) (*http.Response, error) {
 		resp, err := r(req)
-		return resp, stackTracer{
-			customFn: fn,
-			err:      err,
+		return resp, internal.StackTracer{
+			CustomFn: fn,
+			Err:      err,
 		}
 	}
 }
@@ -165,9 +167,9 @@ func NewErrorResponder(err error) Responder {
 //         at /go/src/runtime/asm_amd64.s:1337
 func NewNotFoundResponder(fn func(...interface{})) Responder {
 	return func(req *http.Request) (*http.Response, error) {
-		return nil, stackTracer{
-			customFn: fn,
-			err:      fmt.Errorf("Responder not found for %s %s", req.Method, req.URL),
+		return nil, internal.StackTracer{
+			CustomFn: fn,
+			Err:      fmt.Errorf("Responder not found for %s %s", req.Method, req.URL),
 		}
 	}
 }
