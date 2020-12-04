@@ -164,14 +164,88 @@ func TestNewJsonResponse(t *testing.T) {
 	if checkBody.Hello != body.Hello {
 		t.FailNow()
 	}
+
+	// Error case
+	response, err = NewJsonResponse(200, func() {})
+	if response != nil {
+		t.Fatal("response is not nil")
+	}
+	if err == nil {
+		t.Fatal("no error occurred")
+	}
+}
+
+func checkResponder(t *testing.T, r Responder, expectedStatus int, expectedBody string) {
+	helper(t).Helper()
+
+	req, _ := http.NewRequest(http.MethodGet, "/foo", nil)
+	resp, err := r(req)
+	if err != nil {
+		t.Errorf("An error occurred: %s", err)
+		return
+	}
+
+	if resp == nil {
+		t.Error("Responder returned a nil response")
+		return
+	}
+
+	if resp.StatusCode != expectedStatus {
+		t.Errorf("Status code mismatch: got=%d expected=%d",
+			resp.StatusCode, expectedStatus)
+	}
+
+	assertBody(t, resp, expectedBody)
+}
+
+func TestNewJsonResponder(t *testing.T) {
+	t.Run("OK", func(t *testing.T) {
+		r, err := NewJsonResponder(200, map[string]int{"foo": 42})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		checkResponder(t, r, 200, `{"foo":42}`)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		r, err := NewJsonResponder(200, func() {})
+		if r != nil {
+			t.Error("responder is not nil")
+		}
+		if err == nil {
+			t.Error("no error occurred")
+		}
+	})
+
+	t.Run("OK don't panic", func(t *testing.T) {
+		panicked, str := catchPanic(
+			func() {
+				r := NewJsonResponderOrPanic(200, map[string]int{"foo": 42})
+				checkResponder(t, r, 200, `{"foo":42}`)
+			},
+		)
+		if panicked {
+			t.Errorf("A panic occurred: <%s>", str)
+		}
+	})
+
+	t.Run("Panic", func(t *testing.T) {
+		panicked, _ := catchPanic(
+			func() { NewJsonResponderOrPanic(200, func() {}) },
+		)
+		if !panicked {
+			t.Error("no panic occurred")
+		}
+	})
+}
+
+type schemaXML struct {
+	Hello string `xml:"hello"`
 }
 
 func TestNewXmlResponse(t *testing.T) {
-	type schema struct {
-		Hello string `xml:"hello"`
-	}
-
-	body := &schema{"world"}
+	body := &schemaXML{"world"}
 	status := 200
 
 	response, err := NewXmlResponse(status, body)
@@ -187,7 +261,7 @@ func TestNewXmlResponse(t *testing.T) {
 		t.FailNow()
 	}
 
-	checkBody := &schema{}
+	checkBody := &schemaXML{}
 	if err := xml.NewDecoder(response.Body).Decode(checkBody); err != nil {
 		t.Fatal(err)
 	}
@@ -195,6 +269,65 @@ func TestNewXmlResponse(t *testing.T) {
 	if checkBody.Hello != body.Hello {
 		t.FailNow()
 	}
+
+	// Error case
+	response, err = NewXmlResponse(200, func() {})
+	if response != nil {
+		t.Fatal("response is not nil")
+	}
+	if err == nil {
+		t.Fatal("no error occurred")
+	}
+}
+
+func TestNewXmlResponder(t *testing.T) {
+	body := &schemaXML{"world"}
+
+	b, err := xml.Marshal(body)
+	if err != nil {
+		t.Fatalf("Cannot xml.Marshal expected body: %s", err)
+	}
+	expectedBody := string(b)
+
+	t.Run("OK", func(t *testing.T) {
+		r, err := NewXmlResponder(200, body)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		checkResponder(t, r, 200, expectedBody)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		r, err := NewXmlResponder(200, func() {})
+		if r != nil {
+			t.Error("responder is not nil")
+		}
+		if err == nil {
+			t.Error("no error occurred")
+		}
+	})
+
+	t.Run("OK don't panic", func(t *testing.T) {
+		panicked, str := catchPanic(
+			func() {
+				r := NewXmlResponderOrPanic(200, body)
+				checkResponder(t, r, 200, expectedBody)
+			},
+		)
+		if panicked {
+			t.Errorf("A panic occurred: <%s>", str)
+		}
+	})
+
+	t.Run("Panic", func(t *testing.T) {
+		panicked, _ := catchPanic(
+			func() { NewXmlResponderOrPanic(200, func() {}) },
+		)
+		if !panicked {
+			t.Error("no panic occurred")
+		}
+	})
 }
 
 func TestNewErrorResponder(t *testing.T) {
@@ -259,7 +392,7 @@ func TestResponder(t *testing.T) {
 	resp := &http.Response{}
 
 	chk := func(r Responder, expectedResp *http.Response, expectedErr string) {
-		//t.Helper // Only available since 1.9
+		helper(t).Helper()
 		gotResp, gotErr := r(req)
 		if gotResp != expectedResp {
 			t.Errorf(`Response mismatch, expected: %v, got: %v`, expectedResp, gotResp)
@@ -275,14 +408,14 @@ func TestResponder(t *testing.T) {
 	called := false
 	chkNotCalled := func() {
 		if called {
-			//t.Helper // Only available since 1.9
+			helper(t).Helper()
 			t.Errorf("Original responder should not be called")
 			called = false
 		}
 	}
 	chkCalled := func() {
 		if !called {
-			//t.Helper // Only available since 1.9
+			helper(t).Helper()
 			t.Errorf("Original responder should be called")
 		}
 		called = false
