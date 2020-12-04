@@ -176,6 +176,9 @@ func NewNotFoundResponder(fn func(...interface{})) Responder {
 
 // NewStringResponse creates an *http.Response with a body based on
 // the given string.  Also accepts an http status code.
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewStringResponse(200, httpmock.File("body.txt").String())
 func NewStringResponse(status int, body string) *http.Response {
 	return &http.Response{
 		Status:        strconv.Itoa(status),
@@ -187,12 +190,18 @@ func NewStringResponse(status int, body string) *http.Response {
 }
 
 // NewStringResponder creates a Responder from a given body (as a string) and status code.
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewStringResponder(200, httpmock.File("body.txt").String())
 func NewStringResponder(status int, body string) Responder {
 	return ResponderFromResponse(NewStringResponse(status, body))
 }
 
 // NewBytesResponse creates an *http.Response with a body based on the
 // given bytes.  Also accepts an http status code.
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewBytesResponse(200, httpmock.File("body.raw").Bytes())
 func NewBytesResponse(status int, body []byte) *http.Response {
 	return &http.Response{
 		Status:        strconv.Itoa(status),
@@ -205,6 +214,9 @@ func NewBytesResponse(status int, body []byte) *http.Response {
 
 // NewBytesResponder creates a Responder from a given body (as a byte
 // slice) and status code.
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewBytesResponder(200, httpmock.File("body.raw").Bytes())
 func NewBytesResponder(status int, body []byte) Responder {
 	return ResponderFromResponse(NewBytesResponse(status, body))
 }
@@ -212,6 +224,9 @@ func NewBytesResponder(status int, body []byte) Responder {
 // NewJsonResponse creates an *http.Response with a body that is a
 // json encoded representation of the given interface{}.  Also accepts
 // an http status code.
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewJsonResponse(200, httpmock.File("body.json"))
 func NewJsonResponse(status int, body interface{}) (*http.Response, error) { // nolint: golint
 	encoded, err := json.Marshal(body)
 	if err != nil {
@@ -224,6 +239,9 @@ func NewJsonResponse(status int, body interface{}) (*http.Response, error) { // 
 
 // NewJsonResponder creates a Responder from a given body (as an
 // interface{} that is encoded to json) and status code.
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewJsonResponder(200, httpmock.File("body.json"))
 func NewJsonResponder(status int, body interface{}) (Responder, error) { // nolint: golint
 	resp, err := NewJsonResponse(status, body)
 	if err != nil {
@@ -242,6 +260,9 @@ func NewJsonResponder(status int, body interface{}) (Responder, error) { // noli
 //     "/test/path",
 //     httpmock.NewJSONResponderOrPanic(200, &MyBody),
 //   )
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewJsonResponderOrPanic(200, httpmock.File("body.json"))
 func NewJsonResponderOrPanic(status int, body interface{}) Responder { // nolint: golint
 	responder, err := NewJsonResponder(status, body)
 	if err != nil {
@@ -253,8 +274,19 @@ func NewJsonResponderOrPanic(status int, body interface{}) Responder { // nolint
 // NewXmlResponse creates an *http.Response with a body that is an xml
 // encoded representation of the given interface{}.  Also accepts an
 // http status code.
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewXmlResponse(200, httpmock.File("body.xml"))
 func NewXmlResponse(status int, body interface{}) (*http.Response, error) { // nolint: golint
-	encoded, err := xml.Marshal(body)
+	var (
+		encoded []byte
+		err     error
+	)
+	if f, ok := body.(File); ok {
+		encoded, err = f.bytes()
+	} else {
+		encoded, err = xml.Marshal(body)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -265,6 +297,9 @@ func NewXmlResponse(status int, body interface{}) (*http.Response, error) { // n
 
 // NewXmlResponder creates a Responder from a given body (as an
 // interface{} that is encoded to xml) and status code.
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewXmlResponder(200, httpmock.File("body.xml"))
 func NewXmlResponder(status int, body interface{}) (Responder, error) { // nolint: golint
 	resp, err := NewXmlResponse(status, body)
 	if err != nil {
@@ -283,6 +318,9 @@ func NewXmlResponder(status int, body interface{}) (Responder, error) { // nolin
 //     "/test/path",
 //     httpmock.NewXmlResponderOrPanic(200, &MyBody),
 //   )
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewXmlResponderOrPanic(200, httpmock.File("body.xml"))
 func NewXmlResponderOrPanic(status int, body interface{}) Responder { // nolint: golint
 	responder, err := NewXmlResponder(status, body)
 	if err != nil {
@@ -293,12 +331,18 @@ func NewXmlResponderOrPanic(status int, body interface{}) Responder { // nolint:
 
 // NewRespBodyFromString creates an io.ReadCloser from a string that
 // is suitable for use as an http response body.
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewRespBodyFromString(httpmock.File("body.txt").String())
 func NewRespBodyFromString(body string) io.ReadCloser {
 	return &dummyReadCloser{orig: body}
 }
 
 // NewRespBodyFromBytes creates an io.ReadCloser from a byte slice
 // that is suitable for use as an http response body.
+//
+// To pass the content of an existing file as body use httpmock.File as in:
+//   httpmock.NewRespBodyFromBytes(httpmock.File("body.txt").Bytes())
 func NewRespBodyFromBytes(body []byte) io.ReadCloser {
 	return &dummyReadCloser{orig: body}
 }

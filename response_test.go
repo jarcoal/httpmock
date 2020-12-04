@@ -1,11 +1,11 @@
 package httpmock_test
 
 import (
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -140,33 +140,40 @@ func TestNewJsonResponse(t *testing.T) {
 		Hello string `json:"hello"`
 	}
 
-	body := &schema{"world"}
-	status := 200
+	dir, cleanup := tmpDir(t)
+	defer cleanup()
+	fileName := filepath.Join(dir, "ok.json")
+	writeFile(t, fileName, []byte(`{ "test": true }`))
 
-	response, err := NewJsonResponse(status, body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for i, test := range []struct {
+		body     interface{}
+		expected string
+	}{
+		{body: &schema{"world"}, expected: `{"hello":"world"}`},
+		{body: File(fileName), expected: `{"test":true}`},
+	} {
+		response, err := NewJsonResponse(200, test.body)
+		if err != nil {
+			t.Errorf("#%d NewJsonResponse failed: %s", i, err)
+			continue
+		}
 
-	if response.StatusCode != status {
-		t.FailNow()
-	}
+		if response.StatusCode != 200 {
+			t.Errorf("#%d response status mismatch: %d ≠ 200", i, response.StatusCode)
+			continue
+		}
 
-	if response.Header.Get("Content-Type") != "application/json" {
-		t.FailNow()
-	}
+		if response.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("#%d response Content-Type mismatch: %s ≠ application/json",
+				i, response.Header.Get("Content-Type"))
+			continue
+		}
 
-	checkBody := &schema{}
-	if err := json.NewDecoder(response.Body).Decode(checkBody); err != nil {
-		t.Fatal(err)
-	}
-
-	if checkBody.Hello != body.Hello {
-		t.FailNow()
+		assertBody(t, response, test.expected)
 	}
 
 	// Error case
-	response, err = NewJsonResponse(200, func() {})
+	response, err := NewJsonResponse(200, func() {})
 	if response != nil {
 		t.Fatal("response is not nil")
 	}
@@ -201,6 +208,20 @@ func checkResponder(t *testing.T, r Responder, expectedStatus int, expectedBody 
 func TestNewJsonResponder(t *testing.T) {
 	t.Run("OK", func(t *testing.T) {
 		r, err := NewJsonResponder(200, map[string]int{"foo": 42})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		checkResponder(t, r, 200, `{"foo":42}`)
+	})
+
+	t.Run("OK file", func(t *testing.T) {
+		dir, cleanup := tmpDir(t)
+		defer cleanup()
+		fileName := filepath.Join(dir, "ok.json")
+		writeFile(t, fileName, []byte(`{  "foo"  :  42  }`))
+
+		r, err := NewJsonResponder(200, File(fileName))
 		if err != nil {
 			t.Error(err)
 			return
@@ -246,32 +267,47 @@ type schemaXML struct {
 
 func TestNewXmlResponse(t *testing.T) {
 	body := &schemaXML{"world"}
-	status := 200
 
-	response, err := NewXmlResponse(status, body)
+	b, err := xml.Marshal(body)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Cannot xml.Marshal expected body: %s", err)
 	}
+	expectedBody := string(b)
 
-	if response.StatusCode != status {
-		t.FailNow()
-	}
+	dir, cleanup := tmpDir(t)
+	defer cleanup()
+	fileName := filepath.Join(dir, "ok.xml")
+	writeFile(t, fileName, b)
 
-	if response.Header.Get("Content-Type") != "application/xml" {
-		t.FailNow()
-	}
+	for i, test := range []struct {
+		body     interface{}
+		expected string
+	}{
+		{body: body, expected: expectedBody},
+		{body: File(fileName), expected: expectedBody},
+	} {
+		response, err := NewXmlResponse(200, test.body)
+		if err != nil {
+			t.Errorf("#%d NewXmlResponse failed: %s", i, err)
+			continue
+		}
 
-	checkBody := &schemaXML{}
-	if err := xml.NewDecoder(response.Body).Decode(checkBody); err != nil {
-		t.Fatal(err)
-	}
+		if response.StatusCode != 200 {
+			t.Errorf("#%d response status mismatch: %d ≠ 200", i, response.StatusCode)
+			continue
+		}
 
-	if checkBody.Hello != body.Hello {
-		t.FailNow()
+		if response.Header.Get("Content-Type") != "application/xml" {
+			t.Errorf("#%d response Content-Type mismatch: %s ≠ application/xml",
+				i, response.Header.Get("Content-Type"))
+			continue
+		}
+
+		assertBody(t, response, test.expected)
 	}
 
 	// Error case
-	response, err = NewXmlResponse(200, func() {})
+	response, err := NewXmlResponse(200, func() {})
 	if response != nil {
 		t.Fatal("response is not nil")
 	}
@@ -291,6 +327,20 @@ func TestNewXmlResponder(t *testing.T) {
 
 	t.Run("OK", func(t *testing.T) {
 		r, err := NewXmlResponder(200, body)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		checkResponder(t, r, 200, expectedBody)
+	})
+
+	t.Run("OK file", func(t *testing.T) {
+		dir, cleanup := tmpDir(t)
+		defer cleanup()
+		fileName := filepath.Join(dir, "ok.xml")
+		writeFile(t, fileName, b)
+
+		r, err := NewXmlResponder(200, File(fileName))
 		if err != nil {
 			t.Error(err)
 			return
