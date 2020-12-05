@@ -16,6 +16,7 @@ matrix:
     - go: 1.15.x
       env:
         - USE_LINTER=1
+        - GO_TEST_OPTS="-covermode=atomic -coverprofile=coverage.out"
       install:
         - wget -O - -q https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.30.0
       after_success:
@@ -28,7 +29,7 @@ matrix:
 
 script:
   - export GORACE="halt_on_error=1"
-  - go test -race -covermode=atomic -coverprofile=coverage.out ./...
+  - go test -race $GO_TEST_OPTS ./...
   - >
     if [ "$USE_LINTER" = 1 ]; then
       golangci-lint run -E gofmt -E golint -E maligned -E misspell -E prealloc -E unconvert -E whitespace ./...;
