@@ -60,7 +60,8 @@ func writeFile(t *testing.T, file string, content []byte) {
 	}
 }
 
-// All this stuff to compensate the absence of (*testing.T).Helper() in go<1.9
+// fakeHelper allows to compensate the absence of
+// (*testing.T).Helper() in go<1.9.
 type fakeHelper struct{}
 
 func (f fakeHelper) Helper() {}

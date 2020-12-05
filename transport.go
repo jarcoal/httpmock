@@ -162,13 +162,11 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			m.callCountInfo[respKey]++
 		}
 		m.totalCallCount++
-	} else {
+	} else if m.noResponder != nil {
 		// we didn't find a responder, so fire the 'no responder' responder
-		if m.noResponder != nil {
-			m.callCountInfo[internal.NoResponder]++
-			m.totalCallCount++
-			responder = m.noResponder
-		}
+		m.callCountInfo[internal.NoResponder]++
+		m.totalCallCount++
+		responder = m.noResponder
 	}
 	m.mu.Unlock()
 
@@ -178,7 +176,7 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return runCancelable(responder, internal.SetSubmatches(req, submatches))
 }
 
-// NumResponders
+// NumResponders returns the number of responders currently in use.
 func (m *MockTransport) NumResponders() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -547,7 +545,7 @@ var DefaultTransport = NewMockTransport()
 var InitialTransport = http.DefaultTransport
 
 // oldClients is used to handle custom http clients (i.e clients other
-// than http.DefaultClient)
+// than http.DefaultClient).
 var oldClients = map[*http.Client]http.RoundTripper{}
 
 // Activate starts the mock environment.  This should be called before

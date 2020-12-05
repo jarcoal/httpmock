@@ -32,7 +32,19 @@ script:
   - go test -race $GO_TEST_OPTS ./...
   - >
     if [ "$USE_LINTER" = 1 ]; then
-      golangci-lint run -E gofmt -E golint -E maligned -E misspell -E prealloc -E unconvert -E whitespace ./...;
+      golangci-lint run --max-issues-per-linter 0 \
+                        --max-same-issues 0 \
+                        -E exportloopref \
+                        -E gocritic \
+                        -E godot \
+                        -E goimports \
+                        -E golint \
+                        -E maligned \
+                        -E misspell \
+                        -E prealloc \
+                        -E unconvert \
+                        -E whitespace \
+                        ./...;
     fi
 
 notifications:
