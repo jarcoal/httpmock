@@ -1,14 +1,17 @@
-package httpmock
+package httpmock_test
 
 import (
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	. "github.com/jarcoal/httpmock"
+	"github.com/jarcoal/httpmock/internal"
 )
 
 func TestResponderFromResponse(t *testing.T) {
@@ -69,10 +72,10 @@ func TestNewNotFoundResponder(t *testing.T) {
 	} else if err.Error() != title {
 		t.Errorf(`err mismatch, got: "%s", expected: "%s"`,
 			err, "Responder not found for: GET http://foo.bar/path")
-	} else if ne, ok := err.(stackTracer); !ok {
+	} else if ne, ok := err.(internal.StackTracer); !ok {
 		t.Errorf(`err type mismatch, got %T, expected httpmock.notFound`, err)
-	} else if ne.customFn == nil {
-		t.Error(`err customFn mismatch, got: nil, expected: non-nil`)
+	} else if ne.CustomFn == nil {
+		t.Error(`err CustomFn mismatch, got: nil, expected: non-nil`)
 	}
 
 	// nil fn
@@ -87,10 +90,10 @@ func TestNewNotFoundResponder(t *testing.T) {
 	} else if err.Error() != title {
 		t.Errorf(`err mismatch, got: "%s", expected: "%s"`,
 			err, "Responder not found for: GET http://foo.bar/path")
-	} else if ne, ok := err.(stackTracer); !ok {
+	} else if ne, ok := err.(internal.StackTracer); !ok {
 		t.Errorf(`err type mismatch, got %T, expected httpmock.notFound`, err)
-	} else if ne.customFn != nil {
-		t.Errorf(`err customFn mismatch, got: %p, expected: nil`, ne.customFn)
+	} else if ne.CustomFn != nil {
+		t.Errorf(`err CustomFn mismatch, got: %p, expected: nil`, ne.CustomFn)
 	}
 }
 
@@ -137,61 +140,244 @@ func TestNewJsonResponse(t *testing.T) {
 		Hello string `json:"hello"`
 	}
 
-	body := &schema{"world"}
-	status := 200
+	dir, cleanup := tmpDir(t)
+	defer cleanup()
+	fileName := filepath.Join(dir, "ok.json")
+	writeFile(t, fileName, []byte(`{ "test": true }`))
 
-	response, err := NewJsonResponse(status, body)
-	if err != nil {
-		t.Fatal(err)
+	for i, test := range []struct {
+		body     interface{}
+		expected string
+	}{
+		{body: &schema{"world"}, expected: `{"hello":"world"}`},
+		{body: File(fileName), expected: `{"test":true}`},
+	} {
+		response, err := NewJsonResponse(200, test.body)
+		if err != nil {
+			t.Errorf("#%d NewJsonResponse failed: %s", i, err)
+			continue
+		}
+
+		if response.StatusCode != 200 {
+			t.Errorf("#%d response status mismatch: %d ≠ 200", i, response.StatusCode)
+			continue
+		}
+
+		if response.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("#%d response Content-Type mismatch: %s ≠ application/json",
+				i, response.Header.Get("Content-Type"))
+			continue
+		}
+
+		assertBody(t, response, test.expected)
 	}
 
-	if response.StatusCode != status {
-		t.FailNow()
+	// Error case
+	response, err := NewJsonResponse(200, func() {})
+	if response != nil {
+		t.Fatal("response is not nil")
 	}
-
-	if response.Header.Get("Content-Type") != "application/json" {
-		t.FailNow()
-	}
-
-	checkBody := &schema{}
-	if err := json.NewDecoder(response.Body).Decode(checkBody); err != nil {
-		t.Fatal(err)
-	}
-
-	if checkBody.Hello != body.Hello {
-		t.FailNow()
+	if err == nil {
+		t.Fatal("no error occurred")
 	}
 }
 
-func TestNewXmlResponse(t *testing.T) {
-	type schema struct {
-		Hello string `xml:"hello"`
-	}
+func checkResponder(t *testing.T, r Responder, expectedStatus int, expectedBody string) {
+	helper(t).Helper()
 
-	body := &schema{"world"}
-	status := 200
-
-	response, err := NewXmlResponse(status, body)
+	req, _ := http.NewRequest(http.MethodGet, "/foo", nil)
+	resp, err := r(req)
 	if err != nil {
-		t.Fatal(err)
+		t.Errorf("An error occurred: %s", err)
+		return
 	}
 
-	if response.StatusCode != status {
-		t.FailNow()
+	if resp == nil {
+		t.Error("Responder returned a nil response")
+		return
 	}
 
-	if response.Header.Get("Content-Type") != "application/xml" {
-		t.FailNow()
+	if resp.StatusCode != expectedStatus {
+		t.Errorf("Status code mismatch: got=%d expected=%d",
+			resp.StatusCode, expectedStatus)
 	}
 
-	checkBody := &schema{}
-	if err := xml.NewDecoder(response.Body).Decode(checkBody); err != nil {
-		t.Fatal(err)
+	assertBody(t, resp, expectedBody)
+}
+
+func TestNewJsonResponder(t *testing.T) {
+	t.Run("OK", func(t *testing.T) {
+		r, err := NewJsonResponder(200, map[string]int{"foo": 42})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		checkResponder(t, r, 200, `{"foo":42}`)
+	})
+
+	t.Run("OK file", func(t *testing.T) {
+		dir, cleanup := tmpDir(t)
+		defer cleanup()
+		fileName := filepath.Join(dir, "ok.json")
+		writeFile(t, fileName, []byte(`{  "foo"  :  42  }`))
+
+		r, err := NewJsonResponder(200, File(fileName))
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		checkResponder(t, r, 200, `{"foo":42}`)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		r, err := NewJsonResponder(200, func() {})
+		if r != nil {
+			t.Error("responder is not nil")
+		}
+		if err == nil {
+			t.Error("no error occurred")
+		}
+	})
+
+	t.Run("OK don't panic", func(t *testing.T) {
+		panicked, str := catchPanic(
+			func() {
+				r := NewJsonResponderOrPanic(200, map[string]int{"foo": 42})
+				checkResponder(t, r, 200, `{"foo":42}`)
+			},
+		)
+		if panicked {
+			t.Errorf("A panic occurred: <%s>", str)
+		}
+	})
+
+	t.Run("Panic", func(t *testing.T) {
+		panicked, _ := catchPanic(
+			func() { NewJsonResponderOrPanic(200, func() {}) },
+		)
+		if !panicked {
+			t.Error("no panic occurred")
+		}
+	})
+}
+
+type schemaXML struct {
+	Hello string `xml:"hello"`
+}
+
+func TestNewXmlResponse(t *testing.T) {
+	body := &schemaXML{"world"}
+
+	b, err := xml.Marshal(body)
+	if err != nil {
+		t.Fatalf("Cannot xml.Marshal expected body: %s", err)
+	}
+	expectedBody := string(b)
+
+	dir, cleanup := tmpDir(t)
+	defer cleanup()
+	fileName := filepath.Join(dir, "ok.xml")
+	writeFile(t, fileName, b)
+
+	for i, test := range []struct {
+		body     interface{}
+		expected string
+	}{
+		{body: body, expected: expectedBody},
+		{body: File(fileName), expected: expectedBody},
+	} {
+		response, err := NewXmlResponse(200, test.body)
+		if err != nil {
+			t.Errorf("#%d NewXmlResponse failed: %s", i, err)
+			continue
+		}
+
+		if response.StatusCode != 200 {
+			t.Errorf("#%d response status mismatch: %d ≠ 200", i, response.StatusCode)
+			continue
+		}
+
+		if response.Header.Get("Content-Type") != "application/xml" {
+			t.Errorf("#%d response Content-Type mismatch: %s ≠ application/xml",
+				i, response.Header.Get("Content-Type"))
+			continue
+		}
+
+		assertBody(t, response, test.expected)
 	}
 
-	if checkBody.Hello != body.Hello {
-		t.FailNow()
+	// Error case
+	response, err := NewXmlResponse(200, func() {})
+	if response != nil {
+		t.Fatal("response is not nil")
 	}
+	if err == nil {
+		t.Fatal("no error occurred")
+	}
+}
+
+func TestNewXmlResponder(t *testing.T) {
+	body := &schemaXML{"world"}
+
+	b, err := xml.Marshal(body)
+	if err != nil {
+		t.Fatalf("Cannot xml.Marshal expected body: %s", err)
+	}
+	expectedBody := string(b)
+
+	t.Run("OK", func(t *testing.T) {
+		r, err := NewXmlResponder(200, body)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		checkResponder(t, r, 200, expectedBody)
+	})
+
+	t.Run("OK file", func(t *testing.T) {
+		dir, cleanup := tmpDir(t)
+		defer cleanup()
+		fileName := filepath.Join(dir, "ok.xml")
+		writeFile(t, fileName, b)
+
+		r, err := NewXmlResponder(200, File(fileName))
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		checkResponder(t, r, 200, expectedBody)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		r, err := NewXmlResponder(200, func() {})
+		if r != nil {
+			t.Error("responder is not nil")
+		}
+		if err == nil {
+			t.Error("no error occurred")
+		}
+	})
+
+	t.Run("OK don't panic", func(t *testing.T) {
+		panicked, str := catchPanic(
+			func() {
+				r := NewXmlResponderOrPanic(200, body)
+				checkResponder(t, r, 200, expectedBody)
+			},
+		)
+		if panicked {
+			t.Errorf("A panic occurred: <%s>", str)
+		}
+	})
+
+	t.Run("Panic", func(t *testing.T) {
+		panicked, _ := catchPanic(
+			func() { NewXmlResponderOrPanic(200, func() {}) },
+		)
+		if !panicked {
+			t.Error("no panic occurred")
+		}
+	})
 }
 
 func TestNewErrorResponder(t *testing.T) {
@@ -256,7 +442,7 @@ func TestResponder(t *testing.T) {
 	resp := &http.Response{}
 
 	chk := func(r Responder, expectedResp *http.Response, expectedErr string) {
-		//t.Helper // Only available since 1.9
+		helper(t).Helper()
 		gotResp, gotErr := r(req)
 		if gotResp != expectedResp {
 			t.Errorf(`Response mismatch, expected: %v, got: %v`, expectedResp, gotResp)
@@ -272,14 +458,14 @@ func TestResponder(t *testing.T) {
 	called := false
 	chkNotCalled := func() {
 		if called {
-			//t.Helper // Only available since 1.9
+			helper(t).Helper()
 			t.Errorf("Original responder should not be called")
 			called = false
 		}
 	}
 	chkCalled := func() {
 		if !called {
-			//t.Helper // Only available since 1.9
+			helper(t).Helper()
 			t.Errorf("Original responder should be called")
 		}
 		called = false

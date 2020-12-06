@@ -65,82 +65,82 @@ When vendoring is used, `v1` branch has to be specified. Two choices here:
 ### Simple Example:
 ```go
 func TestFetchArticles(t *testing.T) {
-	httpmock.Activate()
-	defer httpmock.DeactivateAndReset()
+  httpmock.Activate()
+  defer httpmock.DeactivateAndReset()
 
-	// Exact URL match
-	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles",
-		httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
+  // Exact URL match
+  httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles",
+    httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
 
-	// Regexp match (could use httpmock.RegisterRegexpResponder instead)
-	httpmock.RegisterResponder("GET", `=~^https://api\.mybiz\.com/articles/id/\d+\z`,
-		httpmock.NewStringResponder(200, `{"id": 1, "name": "My Great Article"}`))
+  // Regexp match (could use httpmock.RegisterRegexpResponder instead)
+  httpmock.RegisterResponder("GET", `=~^https://api\.mybiz\.com/articles/id/\d+\z`,
+    httpmock.NewStringResponder(200, `{"id": 1, "name": "My Great Article"}`))
 
-	// do stuff that makes a request to articles
-	...
+  // do stuff that makes a request to articles
+  ...
 
-	// get count info
-	httpmock.GetTotalCallCount()
+  // get count info
+  httpmock.GetTotalCallCount()
 
-	// get the amount of calls for the registered responder
-	info := httpmock.GetCallCountInfo()
-	info["GET https://api.mybiz.com/articles"] // number of GET calls made to https://api.mybiz.com/articles
-	info["GET https://api.mybiz.com/articles/id/12"] // number of GET calls made to https://api.mybiz.com/articles/id/12
-	info[`GET =~^https://api\.mybiz\.com/articles/id/\d+\z`] // number of GET calls made to https://api.mybiz.com/articles/id/<any-number>
+  // get the amount of calls for the registered responder
+  info := httpmock.GetCallCountInfo()
+  info["GET https://api.mybiz.com/articles"] // number of GET calls made to https://api.mybiz.com/articles
+  info["GET https://api.mybiz.com/articles/id/12"] // number of GET calls made to https://api.mybiz.com/articles/id/12
+  info[`GET =~^https://api\.mybiz\.com/articles/id/\d+\z`] // number of GET calls made to https://api.mybiz.com/articles/id/<any-number>
 }
 ```
 
 ### Advanced Example:
 ```go
 func TestFetchArticles(t *testing.T) {
-	httpmock.Activate()
-	defer httpmock.DeactivateAndReset()
+  httpmock.Activate()
+  defer httpmock.DeactivateAndReset()
 
-	// our database of articles
-	articles := make([]map[string]interface{}, 0)
+  // our database of articles
+  articles := make([]map[string]interface{}, 0)
 
-	// mock to list out the articles
-	httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles",
-		func(req *http.Request) (*http.Response, error) {
-			resp, err := httpmock.NewJsonResponse(200, articles)
-			if err != nil {
-				return httpmock.NewStringResponse(500, ""), nil
-			}
-			return resp, nil
-		},
-	)
+  // mock to list out the articles
+  httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles",
+    func(req *http.Request) (*http.Response, error) {
+      resp, err := httpmock.NewJsonResponse(200, articles)
+      if err != nil {
+        return httpmock.NewStringResponse(500, ""), nil
+      }
+      return resp, nil
+    },
+  )
 
-	// return an article related to the request with the help of regexp submatch (\d+)
-	httpmock.RegisterResponder("GET", `=~^https://api\.mybiz\.com/articles/id/(\d+)\z`,
-		func(req *http.Request) (*http.Response, error) {
-			// Get ID from request
-			id := httpmock.MustGetSubmatchAsUint(req, 1) // 1=first regexp submatch
-			return httpmock.NewJsonResponse(200, map[string]interface{}{
-				"id":   id,
-				"name": "My Great Article",
-			})
-		},
-	)
+  // return an article related to the request with the help of regexp submatch (\d+)
+  httpmock.RegisterResponder("GET", `=~^https://api\.mybiz\.com/articles/id/(\d+)\z`,
+    func(req *http.Request) (*http.Response, error) {
+      // Get ID from request
+      id := httpmock.MustGetSubmatchAsUint(req, 1) // 1=first regexp submatch
+      return httpmock.NewJsonResponse(200, map[string]interface{}{
+        "id":   id,
+        "name": "My Great Article",
+      })
+    },
+  )
 
-	// mock to add a new article
-	httpmock.RegisterResponder("POST", "https://api.mybiz.com/articles",
-		func(req *http.Request) (*http.Response, error) {
-			article := make(map[string]interface{})
-			if err := json.NewDecoder(req.Body).Decode(&article); err != nil {
-				return httpmock.NewStringResponse(400, ""), nil
-			}
+  // mock to add a new article
+  httpmock.RegisterResponder("POST", "https://api.mybiz.com/articles",
+    func(req *http.Request) (*http.Response, error) {
+      article := make(map[string]interface{})
+      if err := json.NewDecoder(req.Body).Decode(&article); err != nil {
+        return httpmock.NewStringResponse(400, ""), nil
+      }
 
-			articles = append(articles, article)
+      articles = append(articles, article)
 
-			resp, err := httpmock.NewJsonResponse(200, article)
-			if err != nil {
-				return httpmock.NewStringResponse(500, ""), nil
-			}
-			return resp, nil
-		},
-	)
+      resp, err := httpmock.NewJsonResponse(200, article)
+      if err != nil {
+        return httpmock.NewStringResponse(500, ""), nil
+      }
+      return resp, nil
+    },
+  )
 
-	// do stuff that adds and checks articles
+  // do stuff that adds and checks articles
 }
 ```
 
@@ -166,39 +166,39 @@ in the same order, the first match stops the search.
 // article_suite_test.go
 
 import (
-	// ...
-	"github.com/jarcoal/httpmock"
+  // ...
+  "github.com/jarcoal/httpmock"
 )
 // ...
 var _ = BeforeSuite(func() {
-	// block all HTTP requests
-	httpmock.Activate()
+  // block all HTTP requests
+  httpmock.Activate()
 })
 
 var _ = BeforeEach(func() {
-	// remove any mocks
-	httpmock.Reset()
+  // remove any mocks
+  httpmock.Reset()
 })
 
 var _ = AfterSuite(func() {
-	httpmock.DeactivateAndReset()
+  httpmock.DeactivateAndReset()
 })
 
 
 // article_test.go
 
 import (
-	// ...
-	"github.com/jarcoal/httpmock"
+  // ...
+  "github.com/jarcoal/httpmock"
 )
 
 var _ = Describe("Articles", func() {
-	It("returns a list of articles", func() {
-		httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
-			httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
+  It("returns a list of articles", func() {
+    httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
+      httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
 
-		// do stuff that makes a request to articles.json
-	})
+    // do stuff that makes a request to articles.json
+  })
 })
 ```
 
@@ -207,46 +207,46 @@ var _ = Describe("Articles", func() {
 // article_suite_test.go
 
 import (
-	// ...
-	"github.com/jarcoal/httpmock"
-	"github.com/go-resty/resty"
+  // ...
+  "github.com/jarcoal/httpmock"
+  "github.com/go-resty/resty"
 )
 // ...
 var _ = BeforeSuite(func() {
-	// block all HTTP requests
-	httpmock.ActivateNonDefault(resty.DefaultClient.GetClient())
+  // block all HTTP requests
+  httpmock.ActivateNonDefault(resty.DefaultClient.GetClient())
 })
 
 var _ = BeforeEach(func() {
-	// remove any mocks
-	httpmock.Reset()
+  // remove any mocks
+  httpmock.Reset()
 })
 
 var _ = AfterSuite(func() {
-	httpmock.DeactivateAndReset()
+  httpmock.DeactivateAndReset()
 })
 
 
 // article_test.go
 
 import (
-	// ...
-	"github.com/jarcoal/httpmock"
-	"github.com/go-resty/resty"
+  // ...
+  "github.com/jarcoal/httpmock"
+  "github.com/go-resty/resty"
 )
 
 var _ = Describe("Articles", func() {
-	It("returns a list of articles", func() {
-		fixture := `{"status":{"message": "Your message", "code": 200}}`
-		responder := httpmock.NewStringResponder(200, fixture)
-		fakeUrl := "https://api.mybiz.com/articles.json"
-		httpmock.RegisterResponder("GET", fakeUrl, responder)
+  It("returns a list of articles", func() {
+    fixture := `{"status":{"message": "Your message", "code": 200}}`
+    responder := httpmock.NewStringResponder(200, fixture)
+    fakeUrl := "https://api.mybiz.com/articles.json"
+    httpmock.RegisterResponder("GET", fakeUrl, responder)
 
-		// fetch the article into struct
-		articleObject := &models.Article{}
-		_, err := resty.R().SetResult(articleObject).Get(fakeUrl)
+    // fetch the article into struct
+    articleObject := &models.Article{}
+    _, err := resty.R().SetResult(articleObject).Get(fakeUrl)
 
-		// do stuff with the article object ...
-	})
+    // do stuff with the article object ...
+  })
 })
 ```

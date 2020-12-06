@@ -1,11 +1,10 @@
-package httpmock
+package httpmock_test
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -14,36 +13,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	. "github.com/jarcoal/httpmock"
+	"github.com/jarcoal/httpmock/internal"
 )
 
-var testURL = "http://www.example.com/"
-
-func assertBody(t *testing.T, resp *http.Response, expected string) {
-	defer resp.Body.Close()
-
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	got := string(data)
-
-	if got != expected {
-		t.Errorf("Expected body: %#v, got %#v", expected, got)
-	}
-}
-
-func TestRouteKey(t *testing.T) {
-	got, expected := noResponder.String(), "NO_RESPONDER"
-	if got != expected {
-		t.Errorf("got: %v, expected: %v", got, expected)
-	}
-
-	got, expected = routeKey{Method: "GET", URL: "/foo"}.String(), "GET /foo"
-	if got != expected {
-		t.Errorf("got: %v, expected: %v", got, expected)
-	}
-}
+const testURL = "http://www.example.com/"
 
 func TestMockTransport(t *testing.T) {
 	Activate()
@@ -54,20 +29,15 @@ func TestMockTransport(t *testing.T) {
 
 	RegisterResponder("GET", url, NewStringResponder(200, body))
 
-	// Read it as a simple string (ioutil.ReadAll will trigger io.EOF)
+	// Read it as a simple string (ioutil.ReadAll of assertBody will
+	// trigger io.EOF)
 	func() {
 		resp, err := http.Get(url)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
 
-		data, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if string(data) != body {
+		if !assertBody(t, resp, body) {
 			t.FailNow()
 		}
 
@@ -125,34 +95,26 @@ func TestMockTransportDefaultMethod(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
 
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if string(data) != body {
-		t.FailNow()
-	}
+	assertBody(t, resp, body)
 }
 
 func TestMockTransportReset(t *testing.T) {
 	DeactivateAndReset()
 
-	if len(DefaultTransport.responders) > 0 {
+	if DefaultTransport.NumResponders() > 0 {
 		t.Fatal("expected no responders at this point")
 	}
 
 	RegisterResponder("GET", testURL, nil)
 
-	if len(DefaultTransport.responders) != 1 {
+	if DefaultTransport.NumResponders() != 1 {
 		t.Fatal("expected one responder")
 	}
 
 	Reset()
 
-	if len(DefaultTransport.responders) > 0 {
+	if DefaultTransport.NumResponders() > 0 {
 		t.Fatal("expected no responders as they were just reset")
 	}
 }
@@ -162,10 +124,6 @@ func TestMockTransportNoResponder(t *testing.T) {
 	defer DeactivateAndReset()
 
 	Reset()
-
-	if DefaultTransport.noResponder != nil {
-		t.Fatal("expected noResponder to be nil")
-	}
 
 	if _, err := http.Get(testURL); err == nil {
 		t.Fatal("expected to receive a connection error due to lack of responders")
@@ -178,14 +136,7 @@ func TestMockTransportNoResponder(t *testing.T) {
 		t.Fatal("expected request to succeed")
 	}
 
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if string(data) != "hello world" {
-		t.Fatal("expected body to be 'hello world'")
-	}
+	assertBody(t, resp, "hello world")
 }
 
 func TestMockTransportQuerystringFallback(t *testing.T) {
@@ -197,6 +148,7 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 
 	for _, suffix := range []string{"?", "?hello=world", "?hello=world#foo", "?hello=world&hello=all", "#foo"} {
 		reqURL := testURL + suffix
+		t.Log(reqURL)
 
 		// make a request for the testURL with a querystring
 		resp, err := http.Get(reqURL)
@@ -204,14 +156,7 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 			t.Fatalf("expected request %s to succeed", reqURL)
 		}
 
-		data, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("%s error: %s", reqURL, err)
-		}
-
-		if string(data) != "hello world" {
-			t.Fatalf("expected body of %s to be 'hello world'", reqURL)
-		}
+		assertBody(t, resp, "hello world")
 	}
 }
 
@@ -357,20 +302,16 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 		RegisterResponder("GET", test.Responder, NewStringResponder(200, "hello world"))
 
 		for _, reqURL := range test.Paths {
+			t.Logf("%s: %s", test.Responder, reqURL)
+
 			// make a request for the testURL with a querystring
 			resp, err := http.Get(reqURL)
 			if err != nil {
-				t.Fatalf("%s: expected request %s to succeed", test.Responder, reqURL)
+				t.Errorf("%s: expected request %s to succeed", test.Responder, reqURL)
+				continue
 			}
 
-			data, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				t.Fatalf("%s: %s error: %s", test.Responder, reqURL, err)
-			}
-
-			if string(data) != "hello world" {
-				t.Fatalf("%s: expected body of %s to be 'hello world'", test.Responder, reqURL)
-			}
+			assertBody(t, resp, "hello world")
 		}
 
 		DeactivateAndReset()
@@ -433,16 +374,7 @@ func TestMockTransportNonDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer resp.Body.Close()
-
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if string(data) != body {
-		t.FailNow()
-	}
+	assertBody(t, resp, body)
 }
 
 func TestMockTransportRespectsCancel(t *testing.T) {
@@ -755,22 +687,19 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 			RegisterResponderWithQuery("GET", testURLPath, query, NewStringResponder(200, body))
 
 			for _, url := range test.URLs {
+				t.Logf("query=%v URL=%s", query, url)
+
 				req, err := http.NewRequest("GET", url, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
+
 				resp, err := client.Do(req)
 				if err != nil {
 					t.Fatal(err)
 				}
-				data, err := ioutil.ReadAll(resp.Body)
-				resp.Body.Close()
-				if err != nil {
-					t.Fatal(err)
-				}
-				if string(data) != body {
-					t.Fatalf("query=%v URL=%s: %s ≠ %s", query, url, string(data), body)
-				}
+
+				assertBody(t, resp, body)
 			}
 
 			DeactivateAndReset()
@@ -802,27 +731,18 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 			PanicPrefix: `path begins with "=~", RegisterResponder should be used instead of RegisterResponderWithQuery`,
 		},
 	} {
-		var (
-			didntPanic bool
-			panicVal   interface{}
-		)
-		func() {
-			defer func() {
-				panicVal = recover()
-			}()
-
+		panicked, panicStr := catchPanic(func() {
 			RegisterResponderWithQuery("GET", test.Path, test.Query, resp)
-			didntPanic = true
-		}()
+		})
 
-		if didntPanic {
-			t.Fatalf("RegisterResponderWithQuery + query=%v did not panic", test.Query)
+		if !panicked {
+			t.Errorf("RegisterResponderWithQuery + query=%v did not panic", test.Query)
+			continue
 		}
 
-		panicStr, ok := panicVal.(string)
-		if !ok || !strings.HasPrefix(panicStr, test.PanicPrefix) {
+		if !strings.HasPrefix(panicStr, test.PanicPrefix) {
 			t.Fatalf(`RegisterResponderWithQuery + query=%v panic="%v" expected prefix="%v"`,
-				test.Query, panicVal, test.PanicPrefix)
+				test.Query, panicStr, test.PanicPrefix)
 		}
 	}
 }
@@ -842,14 +762,7 @@ func TestRegisterRegexpResponder(t *testing.T) {
 		t.Fatalf("expected request %s to succeed", testURL)
 	}
 
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("%s error: %s", testURL, err)
-	}
-
-	if string(data) != "second" {
-		t.Fatalf("expected body of %s to be 'hello world'", testURL)
-	}
+	assertBody(t, resp, "second")
 }
 
 func TestSubmatches(t *testing.T) {
@@ -858,24 +771,7 @@ func TestSubmatches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var req2 *http.Request
-
-	t.Run("setSubmatches", func(t *testing.T) {
-		req2 = setSubmatches(req, nil)
-		if req2 != req {
-			t.Error("setSubmatches(req, nil) should return the same request")
-		}
-
-		req2 = setSubmatches(req, []string{})
-		if req2 != req {
-			t.Error("setSubmatches(req, []string{}) should return the same request")
-		}
-
-		req2 = setSubmatches(req, []string{"foo", "123", "-123", "12.3"})
-		if req2 == req {
-			t.Error("setSubmatches(req, []string{...}) should NOT return the same request")
-		}
-	})
+	req2 := internal.SetSubmatches(req, []string{"foo", "123", "-123", "12.3"})
 
 	t.Run("GetSubmatch", func(t *testing.T) {
 		_, err := GetSubmatch(req, 1)
@@ -1081,78 +977,12 @@ func TestSubmatches(t *testing.T) {
 }
 
 func TestCheckStackTracer(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://foo.bar/", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// no error
-	gotErr := checkStackTracer(req, nil)
-	if gotErr != nil {
-		t.Errorf(`checkStackTracer(nil) should return nil, not %v`, gotErr)
-	}
-
-	// Classic error
-	err = errors.New("error")
-	gotErr = checkStackTracer(req, err)
-	if err != gotErr {
-		t.Errorf(`checkStackTracer(err) should return %v, not %v`, err, gotErr)
-	}
-
-	// stackTracer without customFn
-	origErr := errors.New("foo")
-	errTracer := stackTracer{
-		err: origErr,
-	}
-	gotErr = checkStackTracer(req, errTracer)
-	if gotErr != origErr {
-		t.Errorf(`Returned error mismatch, expected: %v, got: %v`, origErr, gotErr)
-	}
-
-	// stackTracer with nil error & without customFn
-	errTracer = stackTracer{}
-	gotErr = checkStackTracer(req, errTracer)
-	if gotErr != nil {
-		t.Errorf(`Returned error mismatch, expected: nil, got: %v`, gotErr)
-	}
-
-	// stackTracer
-	var mesg string
-	errTracer = stackTracer{
-		err: origErr,
-		customFn: func(args ...interface{}) {
-			mesg = args[0].(string)
-		},
-	}
-	gotErr = checkStackTracer(req, errTracer)
-	if !strings.HasPrefix(mesg, "foo\nCalled from ") || strings.HasSuffix(mesg, "\n") {
-		t.Errorf(`mesg does not match "^foo\nCalled from .*[^\n]\z", it is "` + mesg + `"`)
-	}
-	if gotErr != origErr {
-		t.Errorf(`Returned error mismatch, expected: %v, got: %v`, origErr, gotErr)
-	}
-
-	// stackTracer with nil error but customFn
-	mesg = ""
-	errTracer = stackTracer{
-		customFn: func(args ...interface{}) {
-			mesg = args[0].(string)
-		},
-	}
-	gotErr = checkStackTracer(req, errTracer)
-	if !strings.HasPrefix(mesg, "GET http://foo.bar/\nCalled from ") || strings.HasSuffix(mesg, "\n") {
-		t.Errorf(`mesg does not match "^foo\nCalled from .*[^\n]\z", it is "` + mesg + `"`)
-	}
-	if gotErr != nil {
-		t.Errorf(`Returned error mismatch, expected: nil, got: %v`, gotErr)
-	}
-
 	// Full test using Trace() Responder
 	Activate()
 	defer Deactivate()
 
 	const url = "https://foo.bar/"
-	mesg = ""
+	var mesg string
 	RegisterResponder("GET", url,
 		NewStringResponder(200, "{}").
 			Trace(func(args ...interface{}) { mesg = args[0].(string) }))
@@ -1161,14 +991,8 @@ func TestCheckStackTracer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
 
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if string(data) != "{}" {
+	if !assertBody(t, resp, "{}") {
 		t.FailNow()
 	}
 
