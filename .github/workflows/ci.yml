@@ -1,0 +1,73 @@
+name: Build
+
+on:
+  push:
+    branches: [ v1 ]
+  pull_request:
+    branches: [ v1 ]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        go-version: [1.7.x, 1.8.x, 1.9.x, 1.10.x, 1.11.x, 1.12.x, 1.13.x, 1.14.x, tip]
+        full-tests: [false]
+        include:
+          - go-version: 1.15.x
+            full-tests: true
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup go
+        run: |
+          curl -sL https://raw.githubusercontent.com/maxatome/install-go/v2.0/install-go.pl |
+              perl - ${{ matrix.go-version }} $HOME/go
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Linting
+        if: matrix.full-tests
+        run: |
+          curl -sL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh |
+              sh -s -- -b $HOME/go/bin v1.33.0
+          $HOME/go/bin/golangci-lint run --max-issues-per-linter 0 \
+                                         --max-same-issues 0 \
+                                         -E exportloopref \
+                                         -E gocritic \
+                                         -E godot \
+                                         -E goimports \
+                                         -E golint \
+                                         -E maligned \
+                                         -E misspell \
+                                         -E prealloc \
+                                         -E unconvert \
+                                         -E whitespace \
+                                         ./...
+
+      - name: Testing
+        continue-on-error: ${{ matrix.go-version == 'tip' }}
+        run: |
+          go version
+          if [ ${{ matrix.full-tests }} = true ]; then
+              GO_TEST_OPTS="-covermode=atomic -coverprofile=coverage.out"
+          fi
+          case ${{ matrix.go-version }} in
+              1.[789].x | 1.10.x) # Before go 1.11, go modules are not available
+                  mkdir -p ../src/github.com/$GITHUB_REPOSITORY_OWNER
+                  ln -s $(pwd) ../src/github.com/$GITHUB_REPOSITORY
+                  export GOPATH=$(dirname $(pwd))
+                  cd $GOPATH/src/github.com/$GITHUB_REPOSITORY
+                  ;;
+          esac
+          export GORACE="halt_on_error=1"
+          go test -race $GO_TEST_OPTS ./...
+
+      - name: Reporting
+        if: matrix.full-tests
+        env:
+          COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          go get github.com/mattn/goveralls
+          goveralls -coverprofile=coverage.out -service=github
