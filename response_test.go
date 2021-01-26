@@ -53,6 +53,76 @@ func TestResponderFromResponse(t *testing.T) {
 	}
 }
 
+func TestResponderFromResponses(t *testing.T) {
+	jsonResponse, err := NewJsonResponse(200, map[string]string{"test": "toto"})
+	if err != nil {
+		t.Errorf("NewJsonResponse failed: %s", err)
+	}
+
+	responder := ResponderFromMultipleResponses(
+		[]*http.Response{
+			jsonResponse,
+			NewStringResponse(200, "hello world"),
+		},
+	)
+
+	req, err := http.NewRequest(http.MethodGet, testURL, nil)
+	if err != nil {
+		t.Fatal("Error creating request")
+	}
+	response1, err := responder(req)
+	if err != nil {
+		t.Error("Error should be nil")
+	}
+
+	testURLWithQuery := testURL + "?a=1"
+	req, err = http.NewRequest(http.MethodGet, testURLWithQuery, nil)
+	if err != nil {
+		t.Fatal("Error creating request")
+	}
+	response2, err := responder(req)
+	if err != nil {
+		t.Error("Error should be nil")
+	}
+
+	// Body should be the same for both responses
+	assertBody(t, response1, `{"test":"toto"}`)
+	assertBody(t, response2, "hello world")
+
+	// Request should be non-nil and different for each response
+	if response1.Request != nil && response2.Request != nil {
+		if response1.Request.URL.String() != testURL {
+			t.Errorf("Expected request url %s, got: %s", testURL, response1.Request.URL.String())
+		}
+		if response2.Request.URL.String() != testURLWithQuery {
+			t.Errorf("Expected request url %s, got: %s", testURLWithQuery, response2.Request.URL.String())
+		}
+	} else {
+		t.Error("response.Request should not be nil")
+	}
+
+	// ensure we can't call the responder more than the number of responses it embeds
+	_, err = responder(req)
+	if err == nil {
+		t.Error("Error should not be nil")
+	} else if err.Error() != "not enough responses provided: responder called 3 time(s) but 2 response(s) provided" {
+		t.Error("Invalid error message")
+	}
+
+	// fn usage
+	responder = ResponderFromMultipleResponses([]*http.Response{}, func(args ...interface{}) {})
+	_, err = responder(req)
+	if err == nil {
+		t.Error("Error should not be nil")
+	} else if err.Error() != "not enough responses provided: responder called 1 time(s) but 0 response(s) provided" {
+		t.Errorf("Invalid error message")
+	} else if ne, ok := err.(internal.StackTracer); !ok {
+		t.Errorf(`err type mismatch, got %T, expected internal.StackTracer`, err)
+	} else if ne.CustomFn == nil {
+		t.Error(`ne.CustomFn should not be nil`)
+	}
+}
+
 func TestNewNotFoundResponder(t *testing.T) {
 	responder := NewNotFoundResponder(func(args ...interface{}) {})
 
