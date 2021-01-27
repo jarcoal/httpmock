@@ -141,6 +141,29 @@ func ResponderFromResponse(resp *http.Response) Responder {
 // For home-made responses, NewRespBodyFromString and
 // NewRespBodyFromBytes functions can be used to produce response
 // bodies that can be read several times and concurrently.
+//
+// If all responses have been returned and fn is passed
+// and non-nil, it acts as the fn parameter of NewNotFoundResponder,
+// allowing to dump the stack trace to localize the origin of the
+// call.
+//   import (
+//     "github.com/jarcoal/httpmock"
+//     "testing"
+//   )
+//   ...
+//   func TestMyApp(t *testing.T) {
+//     ...
+//     // This responder is callable only once, then an error is returned and
+//     // the stacktrace of the call logged using t.Log()
+//     httpmock.RegisterResponder("GET", "/foo/bar",
+//       httpmock.ResponderFromMultipleResponses(
+//         []*http.Response{
+//           httpmock.NewStringResponse(200, `{"name":"bar"}`),
+//           httpmock.NewStringResponse(404, `{"mesg":"Not found"}`),
+//         },
+//         t.Log),
+//     )
+//   }
 func ResponderFromMultipleResponses(responses []*http.Response, fn ...func(...interface{})) Responder {
 	responseIndex := 0
 	mutex := sync.Mutex{}
