@@ -176,12 +176,24 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		method = http.MethodGet
 	}
 
-	var wrongMethodCase bool
+	var suggestedMethod string
 
 	responder, key, respKey, submatches := m.findResponder(method, req.URL)
-	if responder == nil && methodProbablyWrong(method) {
-		responder, _, _, _ := m.findResponder(strings.ToUpper(method), req.URL)
-		wrongMethodCase = responder != nil
+	if responder == nil {
+		// Responder not found, try to detect some common user mistakes on method
+		var altResp Responder
+		var altKey internal.RouteKey
+		if methodProbablyWrong(method) {
+			// Get → GET
+			altResp, _, altKey, _ = m.findResponder(strings.ToUpper(method), req.URL)
+		}
+		if altResp == nil {
+			// Search for any other method
+			altResp, _, altKey, _ = m.findResponder("", req.URL)
+		}
+		if altResp != nil {
+			suggestedMethod = altKey.Method
+		}
 	}
 
 	m.mu.Lock()
@@ -201,8 +213,8 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	m.mu.Unlock()
 
 	if responder == nil {
-		if wrongMethodCase {
-			return nil, internal.ErrorNoResponderFoundMethodCase(method)
+		if suggestedMethod != "" {
+			return nil, internal.NewErrorNoResponderFoundWrongMethod(method, suggestedMethod)
 		}
 		return ConnectionFailure(req)
 	}
@@ -281,7 +293,16 @@ func runCancelable(responder Responder, req *http.Request) (*http.Response, erro
 func (m *MockTransport) responderForKey(key internal.RouteKey) (Responder, internal.RouteKey, []string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.responders[key], key, nil
+	if key.Method != "" {
+		return m.responders[key], key, nil
+	}
+
+	for k, resp := range m.responders {
+		if key.URL == k.URL {
+			return resp, k, nil
+		}
+	}
+	return nil, key, nil
 }
 
 // responderForKeyUsingRegexp returns the first responder matching a
@@ -290,7 +311,7 @@ func (m *MockTransport) regexpResponderForKey(key internal.RouteKey) (Responder,
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for _, regInfo := range m.regexpResponders {
-		if regInfo.method == key.Method {
+		if key.Method == "" || regInfo.method == key.Method {
 			if sm := regInfo.rx.FindStringSubmatch(key.URL); sm != nil {
 				if len(sm) == 1 {
 					sm = nil
@@ -298,7 +319,7 @@ func (m *MockTransport) regexpResponderForKey(key internal.RouteKey) (Responder,
 					sm = sm[1:]
 				}
 				return regInfo.responder, internal.RouteKey{
-					Method: key.Method,
+					Method: regInfo.method,
 					URL:    regInfo.origRx,
 				}, sm
 			}

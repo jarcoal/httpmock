@@ -7,13 +7,14 @@ import (
 )
 
 func TestErrorNoResponderFoundMethodCase(t *testing.T) {
-	e := internal.ErrorNoResponderFoundMethodCase("pipo")
+	e := internal.NewErrorNoResponderFoundWrongMethod("pipo", "BINGO")
 
-	if e.Error() != "no responder found for method pipo, but one matches method PIPO" {
+	if e.Error() != "no responder found for method pipo, but one matches method BINGO" {
 		t.Errorf("not expected error message: %s", e)
 	}
 
-	if werr := e.Unwrap(); werr != internal.NoResponderFound {
+	werr := e.(*internal.ErrorNoResponderFoundWrongMethod).Unwrap()
+	if werr != internal.NoResponderFound {
 		t.Errorf("NoResponderFound is not wrapped, but %[1]s (%[1]T)", werr)
 	}
 }

@@ -28,6 +28,7 @@ func TestMockTransport(t *testing.T) {
 	body := `["hello world"]` + "\n"
 
 	RegisterResponder("GET", url, NewStringResponder(200, body))
+	RegisterResponder("GET", `=~/xxx\z`, NewStringResponder(200, body))
 
 	// Read it as a simple string (ioutil.ReadAll of assertBody will
 	// trigger io.EOF)
@@ -61,6 +62,34 @@ func TestMockTransport(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(),
 			NoResponderFound.Error()+" for method Get, but one matches method GET") {
+			t.Fatal(err)
+		}
+
+		// Use POST instead of GET, the error should warn us
+		req, err = http.NewRequest("POST", url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = c.Do(req)
+		if err == nil {
+			t.Fatal("An error should occur")
+		}
+		if !strings.Contains(err.Error(),
+			NoResponderFound.Error()+" for method POST, but one matches method GET") {
+			t.Fatal(err)
+		}
+
+		// Same using a regexp responder
+		req, err = http.NewRequest("POST", "http://pipo.com/xxx", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = c.Do(req)
+		if err == nil {
+			t.Fatal("An error should occur")
+		}
+		if !strings.Contains(err.Error(),
+			NoResponderFound.Error()+" for method POST, but one matches method GET") {
 			t.Fatal(err)
 		}
 	}()
