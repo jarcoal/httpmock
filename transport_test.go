@@ -36,13 +36,31 @@ func TestMockTransport(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
 		if !assertBody(t, resp, body) {
 			t.FailNow()
 		}
 
 		// the http client wraps our NoResponderFound error, so we just try and match on text
-		if _, err := http.Get(testURL); !strings.Contains(err.Error(), NoResponderFound.Error()) {
+		_, err = http.Get(testURL)
+		if err == nil {
+			t.Fatal("An error should occur")
+		}
+		if !strings.Contains(err.Error(), NoResponderFound.Error()) {
+			t.Fatal(err)
+		}
+
+		// Use wrongly cased method, the error should warn us
+		req, err := http.NewRequest("Get", url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := http.Client{}
+		_, err = c.Do(req)
+		if err == nil {
+			t.Fatal("An error should occur")
+		}
+		if !strings.Contains(err.Error(),
+			NoResponderFound.Error()+" for method Get, but one matches method GET") {
 			t.Fatal(err)
 		}
 	}()
@@ -1001,4 +1019,65 @@ func TestCheckStackTracer(t *testing.T) {
 		strings.HasSuffix(mesg, "\n") {
 		t.Errorf("Bad mesg: <%v>", mesg)
 	}
+}
+
+func TestCheckMethod(t *testing.T) {
+	mt := NewMockTransport()
+
+	var (
+		panicked bool
+		panicStr string
+	)
+
+	//
+	// Panics
+	checkPanic := func() {
+		helper(t).Helper()
+		if panicStr != `You probably want to use method "GET" instead of "get"? If not and so want to disable this check, set MockTransport.DontCheckMethod field to true` {
+			if panicked {
+				t.Errorf("Wrong panic mesg: %s", panicStr)
+			} else {
+				t.Error("Did not panic!")
+			}
+		}
+	}
+
+	panicked, panicStr = catchPanic(func() {
+		mt.RegisterResponder("get", "/pipo", NewStringResponder(200, ""))
+	})
+	checkPanic()
+
+	panicked, panicStr = catchPanic(func() {
+		mt.RegisterRegexpResponder("get", regexp.MustCompile("."), NewStringResponder(200, ""))
+	})
+	checkPanic()
+
+	panicked, panicStr = catchPanic(func() {
+		mt.RegisterResponderWithQuery("get", "/pipo", url.Values(nil), NewStringResponder(200, ""))
+	})
+	checkPanic()
+
+	//
+	// No longer panics
+	checkNoPanic := func() {
+		helper(t).Helper()
+		if panicked {
+			t.Errorf("Should not panic! but %s", panicStr)
+		}
+	}
+	mt.DontCheckMethod = true
+	panicked, panicStr = catchPanic(func() {
+		mt.RegisterResponder("get", "/pipo", NewStringResponder(200, ""))
+	})
+	checkNoPanic()
+
+	panicked, panicStr = catchPanic(func() {
+		mt.RegisterRegexpResponder("get", regexp.MustCompile("."), NewStringResponder(200, ""))
+	})
+	checkNoPanic()
+
+	panicked, panicStr = catchPanic(func() {
+		mt.RegisterResponderWithQuery("get", "/pipo", url.Values(nil), NewStringResponder(200, ""))
+	})
+	checkNoPanic()
 }

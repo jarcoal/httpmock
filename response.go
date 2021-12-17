@@ -293,7 +293,7 @@ func NewBytesResponder(status int, body []byte) Responder {
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewJsonResponse(200, httpmock.File("body.json"))
-func NewJsonResponse(status int, body interface{}) (*http.Response, error) { // nolint: golint
+func NewJsonResponse(status int, body interface{}) (*http.Response, error) { // nolint: revive
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -308,7 +308,7 @@ func NewJsonResponse(status int, body interface{}) (*http.Response, error) { // 
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewJsonResponder(200, httpmock.File("body.json"))
-func NewJsonResponder(status int, body interface{}) (Responder, error) { // nolint: golint
+func NewJsonResponder(status int, body interface{}) (Responder, error) { // nolint: revive
 	resp, err := NewJsonResponse(status, body)
 	if err != nil {
 		return nil, err
@@ -329,7 +329,7 @@ func NewJsonResponder(status int, body interface{}) (Responder, error) { // noli
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewJsonResponderOrPanic(200, httpmock.File("body.json"))
-func NewJsonResponderOrPanic(status int, body interface{}) Responder { // nolint: golint
+func NewJsonResponderOrPanic(status int, body interface{}) Responder { // nolint: revive
 	responder, err := NewJsonResponder(status, body)
 	if err != nil {
 		panic(err)
@@ -343,7 +343,7 @@ func NewJsonResponderOrPanic(status int, body interface{}) Responder { // nolint
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewXmlResponse(200, httpmock.File("body.xml"))
-func NewXmlResponse(status int, body interface{}) (*http.Response, error) { // nolint: golint
+func NewXmlResponse(status int, body interface{}) (*http.Response, error) { // nolint: revive
 	var (
 		encoded []byte
 		err     error
@@ -366,7 +366,7 @@ func NewXmlResponse(status int, body interface{}) (*http.Response, error) { // n
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewXmlResponder(200, httpmock.File("body.xml"))
-func NewXmlResponder(status int, body interface{}) (Responder, error) { // nolint: golint
+func NewXmlResponder(status int, body interface{}) (Responder, error) { // nolint: revive
 	resp, err := NewXmlResponse(status, body)
 	if err != nil {
 		return nil, err
@@ -387,7 +387,7 @@ func NewXmlResponder(status int, body interface{}) (Responder, error) { // nolin
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewXmlResponderOrPanic(200, httpmock.File("body.xml"))
-func NewXmlResponderOrPanic(status int, body interface{}) Responder { // nolint: golint
+func NewXmlResponderOrPanic(status int, body interface{}) Responder { // nolint: revive
 	responder, err := NewXmlResponder(status, body)
 	if err != nil {
 		panic(err)
