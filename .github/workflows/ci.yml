@@ -34,14 +34,15 @@ jobs:
               sh -s -- -b $HOME/go/bin v1.43.0
           $HOME/go/bin/golangci-lint run --max-issues-per-linter 0 \
                                          --max-same-issues 0 \
+                                         -E bidichk \
                                          -E exportloopref \
                                          -E gocritic \
                                          -E godot \
                                          -E goimports \
-                                         -E golint \
                                          -E maligned \
                                          -E misspell \
                                          -E prealloc \
+                                         -E revive \
                                          -E unconvert \
                                          -E whitespace \
                                          ./...
