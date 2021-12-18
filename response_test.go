@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	. "github.com/jarcoal/httpmock"
 	"github.com/jarcoal/httpmock/internal"
@@ -597,6 +598,17 @@ func TestResponder(t *testing.T) {
 
 	chk(rt, resp, "")
 	chkCalled()
+
+	//
+	// Delay
+	rt = r.Delay(100 * time.Millisecond)
+	before := time.Now()
+	chk(rt, resp, "")
+	duration := time.Since(before)
+	chkCalled()
+	if duration < 100*time.Millisecond {
+		t.Errorf("Responder is not delayed, only %s elapsed", duration)
+	}
 }
 
 func TestParallelResponder(t *testing.T) {
