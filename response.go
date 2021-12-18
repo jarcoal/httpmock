@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jarcoal/httpmock/internal"
 )
@@ -98,6 +99,26 @@ func (r Responder) Trace(fn func(...interface{})) Responder {
 			CustomFn: fn,
 			Err:      err,
 		}
+	}
+}
+
+// Delay returns a new Responder that calls the original r Responder
+// after a delay of d.
+//   import (
+//     "testing"
+//     "time"
+//     "github.com/jarcoal/httpmock"
+//   )
+//   ...
+//   func TestMyApp(t *testing.T) {
+//     ...
+//     httpmock.RegisterResponder("GET", "/foo/bar",
+//       httpmock.NewStringResponder(200, "{}").Delay(100*time.Millisecond),
+//     )
+func (r Responder) Delay(d time.Duration) Responder {
+	return func(req *http.Request) (*http.Response, error) {
+		time.Sleep(d)
+		return r(req)
 	}
 }
 
