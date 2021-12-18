@@ -2,11 +2,14 @@ package httpmock
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -120,6 +123,79 @@ func (r Responder) Delay(d time.Duration) Responder {
 		time.Sleep(d)
 		return r(req)
 	}
+}
+
+type fromThenKeyType struct{}
+
+var fromThenKey = fromThenKeyType{}
+
+var errThenDone = errors.New("ThenDone")
+
+// similar is simple but a bit tricky. Here we consider two Responder
+// are similar if they share the same function, but not necessarily
+// the same environment. It is only used by Then below.
+func (r Responder) similar(other Responder) bool {
+	return reflect.ValueOf(r).Pointer() == reflect.ValueOf(other).Pointer()
+}
+
+// Then returns a new Responder that calls r on first invocation, then
+// next on following ones, except when Then is chained, in this case
+// next is called only once:
+//   A := httpmock.NewStringResponder(200, "A")
+//   B := httpmock.NewStringResponder(200, "B")
+//   C := httpmock.NewStringResponder(200, "C")
+//
+//   httpmock.RegisterResponder("GET", "/pipo", A.Then(B).Then(C))
+//
+//   http.Get("http://foo.bar/pipo") // A is called
+//   http.Get("http://foo.bar/pipo") // B is called
+//   http.Get("http://foo.bar/pipo") // C is called
+//   http.Get("http://foo.bar/pipo") // C is called, and so on
+//
+// A panic occurs if next is the result of another Then call (because
+// allowing it could cause inextricable problems at runtime). Then
+// calls can be chained, but cannot call each other by
+// parameter. Example:
+//   A.Then(B).Then(C) // is OK
+//   A.Then(B.Then(C)) // panics as A.Then() parameter is another Then() call
+func (r Responder) Then(next Responder) (x Responder) {
+	var done int
+	var mu sync.Mutex
+	x = func(req *http.Request) (*http.Response, error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		ctx := req.Context()
+		thenCalledUs, _ := ctx.Value(fromThenKey).(bool)
+		if !thenCalledUs {
+			req = req.WithContext(context.WithValue(ctx, fromThenKey, true))
+		}
+
+		switch done {
+		case 0:
+			resp, err := r(req)
+			if err != errThenDone {
+				if !x.similar(r) { // r is NOT a Then
+					done = 1
+				}
+				return resp, err
+			}
+			fallthrough
+
+		case 1:
+			done = 2 // next is NEVER a Then, as it is forbidden by design
+			return next(req)
+		}
+		if thenCalledUs {
+			return nil, errThenDone
+		}
+		return next(req)
+	}
+
+	if next.similar(x) {
+		panic("Then() does not accept another Then() Responder as parameter")
+	}
+	return
 }
 
 // ResponderFromResponse wraps an *http.Response in a Responder.

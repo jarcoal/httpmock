@@ -655,6 +655,98 @@ func TestResponder(t *testing.T) {
 	}
 }
 
+func TestResponder_Then(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, "http://foo.bar", nil)
+	if err != nil {
+		t.Fatalf("Error creating request: %s", err)
+	}
+
+	//
+	// Then
+	var stack string
+	newResponder := func(level string) Responder {
+		return func(*http.Request) (*http.Response, error) {
+			stack += level
+			return NewStringResponse(200, level), nil
+		}
+	}
+	var rt Responder
+	chk := func(t *testing.T, expectedLevel, expectedStack string) {
+		helper(t).Helper()
+		resp, err := rt(req)
+		if err != nil {
+			t.Errorf("Responder retruned an unexpected error: %s", err)
+			return
+		}
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Errorf("Read response failed: %s", err)
+			return
+		}
+		if string(b) != expectedLevel {
+			t.Errorf("level: got %q but expected %q (stack is %q)",
+				b, expectedLevel, stack)
+			return
+		}
+		if stack != expectedStack {
+			t.Errorf("stack: got %q but expected %q", stack, expectedStack)
+			return
+		}
+	}
+
+	A, B, C := newResponder("A"), newResponder("B"), newResponder("C")
+	D, E, F := newResponder("D"), newResponder("E"), newResponder("F")
+
+	t.Run("simple", func(t *testing.T) {
+		// (r=A,then=B)
+		rt = A.Then(B)
+
+		chk(t, "A", "A")
+		chk(t, "B", "AB")
+		chk(t, "B", "ABB")
+		chk(t, "B", "ABBB")
+	})
+
+	stack = ""
+
+	t.Run("simple chained", func(t *testing.T) {
+		//             (r=A,then=B)
+		//          (r=↑,then=C)
+		//       (r=↑,then=D)
+		//    (r=↑,then=E)
+		// (r=↑,then=F)
+		rt = A.Then(B).
+			Then(C).
+			Then(D).
+			Then(E).
+			Then(F)
+
+		chk(t, "A", "A")
+		chk(t, "B", "AB")
+		chk(t, "C", "ABC")
+		chk(t, "D", "ABCD")
+		chk(t, "E", "ABCDE")
+		chk(t, "F", "ABCDEF")
+		chk(t, "F", "ABCDEFF")
+		chk(t, "F", "ABCDEFFF")
+	})
+
+	stack = ""
+
+	t.Run("Then Responder as Then param", func(t *testing.T) {
+		panicked, str := catchPanic(func() {
+			A.Then(B.Then(C))
+		})
+		if str != "Then() does not accept another Then() Responder as parameter" {
+			if !panicked {
+				t.Error("Should have panicked")
+			} else {
+				t.Errorf("Wrong panic message: %q", str)
+			}
+		}
+	})
+}
+
 func TestParallelResponder(t *testing.T) {
 	req, err := http.NewRequest(http.MethodGet, "http://foo.bar", nil)
 	if err != nil {
