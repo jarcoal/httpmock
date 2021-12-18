@@ -3,6 +3,8 @@ package httpmock_test
 import (
 	"encoding/xml"
 	"errors"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
@@ -468,41 +470,83 @@ func TestNewErrorResponder(t *testing.T) {
 	}
 }
 
-func TestRewindResponse(t *testing.T) {
-	body := []byte("hello world")
-	status := 200
-	responses := []*http.Response{
-		NewBytesResponse(status, body),
-		NewStringResponse(status, string(body)),
-	}
+func TestResponseBody(t *testing.T) {
+	const (
+		body   = "hello world"
+		status = 200
+	)
 
-	for _, response := range responses {
-		data, err := ioutil.ReadAll(response.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
+	t.Run("http.Response", func(t *testing.T) {
+		for i, response := range []*http.Response{
+			NewBytesResponse(status, []byte(body)),
+			NewStringResponse(status, body),
+		} {
+			t.Run(fmt.Sprintf("resp #%d", i), func(t *testing.T) {
+				data, err := ioutil.ReadAll(response.Body)
+				if err != nil {
+					t.Error(err)
+					return
+				}
 
-		if string(data) != string(body) {
-			t.FailNow()
-		}
+				if string(data) != string(body) {
+					t.Errorf("body mismatch: %q ≠ %q", data, body)
+					return
+				}
 
-		if response.StatusCode != status {
-			t.FailNow()
-		}
+				if response.StatusCode != status {
+					t.Errorf("status mismatch: %d ≠ %d", response.StatusCode, status)
+					return
+				}
 
-		data, err = ioutil.ReadAll(response.Body)
-		if err != nil {
-			t.Fatal(err)
+				var buf [1]byte
+				_, err = response.Body.Read(buf[:])
+				if err == nil {
+					t.Errorf("Next Read() should produce an error")
+					return
+				}
+				if err != io.EOF {
+					t.Errorf("Next Read() should io.EOF")
+				}
+			})
 		}
+	})
 
-		if string(data) != string(body) {
-			t.FailNow()
-		}
+	t.Run("Responder", func(t *testing.T) {
+		for i, responder := range []Responder{
+			NewBytesResponder(200, []byte(body)),
+			NewStringResponder(200, body),
+		} {
+			t.Run(fmt.Sprintf("resp #%d", i), func(t *testing.T) {
+				req, _ := http.NewRequest("GET", "http://foo.bar", nil)
+				response, err := responder(req)
+				if err != nil {
+					t.Error(err)
+					return
+				}
 
-		if response.StatusCode != status {
-			t.FailNow()
+				data, err := ioutil.ReadAll(response.Body)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+
+				if string(data) != string(body) {
+					t.Errorf("body mismatch: %q ≠ %q", data, body)
+					return
+				}
+
+				var buf [1]byte
+				_, err = response.Body.Read(buf[:])
+				if err == nil {
+					t.Errorf("Next Read() should produce an error")
+					return
+				}
+				if err != io.EOF {
+					t.Errorf("Next Read() should io.EOF")
+				}
+			})
 		}
-	}
+	})
 }
 
 func TestResponder(t *testing.T) {
