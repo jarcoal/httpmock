@@ -458,15 +458,11 @@ func (d *dummyReadCloser) setup() {
 
 func (d *dummyReadCloser) Read(p []byte) (n int, err error) {
 	d.setup()
-	n, err = d.body.Read(p)
-	if err == io.EOF {
-		d.body.Seek(0, 0) // nolint: errcheck
-	}
-	return n, err
+	return d.body.Read(p)
 }
 
 func (d *dummyReadCloser) Close() error {
 	d.setup()
-	d.body.Seek(0, 0) // nolint: errcheck
+	d.body.Seek(0, io.SeekEnd) // nolint: errcheck
 	return nil
 }
