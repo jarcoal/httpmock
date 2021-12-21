@@ -21,6 +21,10 @@ func TestStackTracer(t *testing.T) {
 	if st.Error() != "foo" {
 		t.Errorf("Error() returned <%s> instead of <foo>", st.Error())
 	}
+
+	if werr := st.Unwrap(); werr != st.Err {
+		t.Errorf("Unwrap() returned <%s> instead of <foo>", werr)
+	}
 }
 
 func TestCheckStackTracer(t *testing.T) {

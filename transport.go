@@ -2,6 +2,7 @@ package httpmock
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -208,6 +209,10 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// we didn't find a responder, so fire the 'no responder' responder
 		m.callCountInfo[internal.NoResponder]++
 		m.totalCallCount++
+		// give a hint to NewNotFoundResponder() if it is a possible method error
+		if suggestedMethod != "" {
+			req = req.WithContext(context.WithValue(req.Context(), suggestedMethodKey, suggestedMethod))
+		}
 		responder = m.noResponder
 	}
 	m.mu.Unlock()
@@ -552,7 +557,30 @@ func sortedQuery(m url.Values) string {
 }
 
 // RegisterNoResponder is used to register a responder that is called
-// if no other responder is found.  The default is httpmock.ConnectionFailure.
+// if no other responder is found.  The default is httpmock.ConnectionFailure
+// that returns an error able to indicate a possible method mismatch.
+//
+// Use it in conjunction with NewNotFoundResponder to ensure that all
+// routes have been mocked:
+//
+//   import (
+//     "testing"
+//     "github.com/jarcoal/httpmock"
+//   )
+//   ...
+//   func TestMyApp(t *testing.T) {
+//      ...
+//      // Calls testing.Fatal with the name of Responder-less route and
+//      // the stack trace of the call.
+//      httpmock.RegisterNoResponder(httpmock.NewNotFoundResponder(t.Fatal))
+//
+// Will abort the current test and print something like:
+//   transport_test.go:735: Called from net/http.Get()
+//         at /go/src/github.com/jarcoal/httpmock/transport_test.go:714
+//       github.com/jarcoal/httpmock.TestCheckStackTracer()
+//         at /go/src/testing/testing.go:865
+//       testing.tRunner()
+//         at /go/src/runtime/asm_amd64.s:1337
 func (m *MockTransport) RegisterNoResponder(responder Responder) {
 	m.mu.Lock()
 	m.noResponder = responder

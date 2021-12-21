@@ -18,6 +18,16 @@ import (
 	"github.com/jarcoal/httpmock/internal"
 )
 
+// fromThenKeyType is used by Then().
+type fromThenKeyType struct{}
+
+var fromThenKey = fromThenKeyType{}
+
+// suggestedMethodKeyType is used by NewNotFoundResponder().
+type suggestedMethodKeyType struct{}
+
+var suggestedMethodKey = suggestedMethodKeyType{}
+
 // Responder is a callback that receives an http request and returns
 // a mocked response.
 type Responder func(*http.Request) (*http.Response, error)
@@ -124,10 +134,6 @@ func (r Responder) Delay(d time.Duration) Responder {
 		return r(req)
 	}
 }
-
-type fromThenKeyType struct{}
-
-var fromThenKey = fromThenKeyType{}
 
 var errThenDone = errors.New("ThenDone")
 
@@ -330,9 +336,13 @@ func NewErrorResponder(err error) Responder {
 //         at /go/src/runtime/asm_amd64.s:1337
 func NewNotFoundResponder(fn func(...interface{})) Responder {
 	return func(req *http.Request) (*http.Response, error) {
+		suggestedMethod, _ := req.Context().Value(suggestedMethodKey).(string)
+		if suggestedMethod != "" {
+			suggestedMethod = ", but one matches method " + suggestedMethod
+		}
 		return nil, internal.StackTracer{
 			CustomFn: fn,
-			Err:      fmt.Errorf("Responder not found for %s %s", req.Method, req.URL),
+			Err:      fmt.Errorf("Responder not found for %s %s%s", req.Method, req.URL, suggestedMethod),
 		}
 	}
 }
