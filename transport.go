@@ -364,7 +364,14 @@ func (m *MockTransport) checkMethod(method string) {
 // GetCallCountInfo(). As 2 regexps can match the same URL, the regexp
 // responders are tested in the order they are registered. Registering
 // an already existing regexp responder (same method & same regexp
-// string) replaces its responder but does not change its position.
+// string) replaces its responder, but does not change its position.
+//
+// Registering an already existing responder resets the corresponding
+// statistics as returned by GetCallCountInfo().
+//
+// Registering a nil Responder removes the existing one and the
+// corresponding statistics as returned by GetCallCountInfo(). It does
+// nothing if it does not already exist.
 //
 // See RegisterRegexpResponder() to directly pass a *regexp.Regexp.
 //
@@ -410,31 +417,49 @@ func (m *MockTransport) RegisterResponder(method, url string, responder Responde
 	}
 
 	m.mu.Lock()
-	m.responders[key] = responder
-	m.callCountInfo[key] = 0
+	if responder == nil {
+		delete(m.responders, key)
+		delete(m.callCountInfo, key)
+	} else {
+		m.responders[key] = responder
+		m.callCountInfo[key] = 0
+	}
 	m.mu.Unlock()
 }
 
-func (m *MockTransport) registerRegexpResponder(regexpResponder regexpResponder) {
+func (m *MockTransport) registerRegexpResponder(rxResp regexpResponder) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 found:
 	for {
 		for i, rr := range m.regexpResponders {
-			if rr.method == regexpResponder.method && rr.origRx == regexpResponder.origRx {
-				m.regexpResponders[i] = regexpResponder
+			if rr.method == rxResp.method && rr.origRx == rxResp.origRx {
+				if rxResp.responder == nil {
+					copy(m.regexpResponders[:i], m.regexpResponders[i+1:])
+					m.regexpResponders[len(m.regexpResponders)-1] = regexpResponder{}
+					m.regexpResponders = m.regexpResponders[:len(m.regexpResponders)-1]
+				} else {
+					m.regexpResponders[i] = rxResp
+				}
 				break found
 			}
 		}
-		m.regexpResponders = append(m.regexpResponders, regexpResponder)
+		if rxResp.responder != nil {
+			m.regexpResponders = append(m.regexpResponders, rxResp)
+		}
 		break // nolint: staticcheck
 	}
 
-	m.callCountInfo[internal.RouteKey{
-		Method: regexpResponder.method,
-		URL:    regexpResponder.origRx,
-	}] = 0
+	key := internal.RouteKey{
+		Method: rxResp.method,
+		URL:    rxResp.origRx,
+	}
+	if rxResp.responder == nil {
+		delete(m.callCountInfo, key)
+	} else {
+		m.callCountInfo[key] = 0
+	}
 }
 
 // RegisterRegexpResponder adds a new responder, associated with a given
@@ -446,7 +471,12 @@ found:
 // As 2 regexps can match the same URL, the regexp responders are
 // tested in the order they are registered. Registering an already
 // existing regexp responder (same method & same regexp string)
-// replaces its responder but does not change its position.
+// replaces its responder, but does not change its position, and
+// resets the corresponding statistics as returned by GetCallCountInfo().
+//
+// Registering a nil Responder removes the existing one and the
+// corresponding statistics as returned by GetCallCountInfo(). It does
+// nothing if it does not already exist.
 //
 // A "=~" prefix is added to the stringified regexp in the statistics
 // returned by GetCallCountInfo().
@@ -482,6 +512,13 @@ func (m *MockTransport) RegisterRegexpResponder(method string, urlRegexp *regexp
 //
 // Unlike RegisterResponder, path cannot be prefixed by "=~" to say it
 // is a regexp. If it is, a panic occurs.
+//
+// Registering an already existing responder resets the corresponding
+// statistics as returned by GetCallCountInfo().
+//
+// Registering a nil Responder removes the existing one and the
+// corresponding statistics as returned by GetCallCountInfo(). It does
+// nothing if it does not already exist.
 //
 // If method is a lower-cased version of CONNECT, DELETE, GET, HEAD,
 // OPTIONS, POST, PUT or TRACE, a panics occurs to notice the possible
@@ -581,6 +618,9 @@ func sortedQuery(m url.Values) string {
 //         at /go/src/testing/testing.go:865
 //       testing.tRunner()
 //         at /go/src/runtime/asm_amd64.s:1337
+//
+// If responder is passed as nil, the default behavior
+// (httpmock.ConnectionFailure) is re-enabled.
 func (m *MockTransport) RegisterNoResponder(responder Responder) {
 	m.mu.Lock()
 	m.noResponder = responder
@@ -812,7 +852,14 @@ func DeactivateAndReset() {
 // GetCallCountInfo(). As 2 regexps can match the same URL, the regexp
 // responders are tested in the order they are registered. Registering
 // an already existing regexp responder (same method & same regexp
-// string) replaces its responder but does not change its position.
+// string) replaces its responder, but does not change its position.
+//
+// Registering an already existing responder resets the corresponding
+// statistics as returned by GetCallCountInfo().
+//
+// Registering a nil Responder removes the existing one and the
+// corresponding statistics as returned by GetCallCountInfo(). It does
+// nothing if it does not already exist.
 //
 // See RegisterRegexpResponder() to directly pass a *regexp.Regexp.
 //
@@ -852,7 +899,12 @@ func RegisterResponder(method, url string, responder Responder) {
 // As 2 regexps can match the same URL, the regexp responders are
 // tested in the order they are registered. Registering an already
 // existing regexp responder (same method & same regexp string)
-// replaces its responder but does not change its position.
+// replaces its responder, but does not change its position, and
+// resets the corresponding statistics as returned by GetCallCountInfo().
+//
+// Registering a nil Responder removes the existing one and the
+// corresponding statistics as returned by GetCallCountInfo(). It does
+// nothing if it does not already exist.
 //
 // A "=~" prefix is added to the stringified regexp in the statistics
 // returned by GetCallCountInfo().
@@ -878,6 +930,16 @@ func RegisterRegexpResponder(method string, urlRegexp *regexp.Regexp, responder 
 //
 // If the query type is not recognized or the string cannot be parsed
 // using net/url.ParseQuery, a panic() occurs.
+//
+// Unlike RegisterResponder, path cannot be prefixed by "=~" to say it
+// is a regexp. If it is, a panic occurs.
+//
+// Registering an already existing responder resets the corresponding
+// statistics as returned by GetCallCountInfo().
+//
+// Registering a nil Responder removes the existing one and the
+// corresponding statistics as returned by GetCallCountInfo(). It does
+// nothing if it does not already exist.
 //
 // Example using a net/url.Values:
 //   func TestFetchArticles(t *testing.T) {

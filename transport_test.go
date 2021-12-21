@@ -153,7 +153,7 @@ func TestMockTransportReset(t *testing.T) {
 		t.Fatal("expected no responders at this point")
 	}
 
-	RegisterResponder("GET", testURL, nil)
+	RegisterResponder("GET", testURL, NewStringResponder(200, "hey"))
 
 	if DefaultTransport.NumResponders() != 1 {
 		t.Fatal("expected one responder")
@@ -687,9 +687,25 @@ func TestMockTransportCallCountZero(t *testing.T) {
 	if !reflect.DeepEqual(info, expectedInfo) {
 		t.Fatalf("did not correctly reset the call count info. expected it to be \n %+v\n but it was \n %+v", expectedInfo, info)
 	}
+
+	// Unregister each responder
+	RegisterResponder("GET", url, nil)
+	RegisterResponder("POST", "=~gitlab", nil)
+
+	info = GetCallCountInfo()
+	expectedInfo = map[string]int{
+		// this one remains as it is not directly related to a registered
+		// responder but a consequence of a regexp match
+		"POST " + url2: 0,
+	}
+	if !reflect.DeepEqual(info, expectedInfo) {
+		t.Fatalf("did not correctly reset the call count info. expected it to be \n %+v\n but it was \n %+v", expectedInfo, info)
+	}
 }
 
 func TestRegisterResponderWithQuery(t *testing.T) {
+	Reset()
+
 	// Just in case a panic occurs
 	defer DeactivateAndReset()
 
@@ -766,6 +782,34 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 				}
 
 				assertBody(t, resp, body)
+			}
+
+			if info := GetCallCountInfo(); len(info) != 1 {
+				t.Fatalf("%s: len(GetCallCountInfo()) should be 1 but contains %+v", testURLPath, info)
+			}
+
+			// Remove...
+			RegisterResponderWithQuery("GET", testURLPath, query, nil)
+			if info := GetCallCountInfo(); len(info) != 0 {
+				t.Fatalf("did not correctly reset the call count info, it still contains %+v", info)
+			}
+
+			for _, url := range test.URLs {
+				t.Logf("query=%v URL=%s", query, url)
+
+				req, err := http.NewRequest("GET", url, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				_, err = client.Do(req)
+				if err == nil {
+					t.Fatalf("No error occurred for %s", url)
+				}
+
+				if !strings.HasSuffix(err.Error(), "no responder found") {
+					t.Errorf("Not expected error suffix: %s", err)
+				}
 			}
 
 			DeactivateAndReset()
