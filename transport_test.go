@@ -46,7 +46,7 @@ func TestMockTransport(t *testing.T) {
 		if err == nil {
 			t.Fatal("An error should occur")
 		}
-		if !strings.Contains(err.Error(), NoResponderFound.Error()) {
+		if !strings.HasSuffix(err.Error(), NoResponderFound.Error()) {
 			t.Fatal(err)
 		}
 
@@ -60,7 +60,7 @@ func TestMockTransport(t *testing.T) {
 		if err == nil {
 			t.Fatal("An error should occur")
 		}
-		if !strings.Contains(err.Error(),
+		if !strings.HasSuffix(err.Error(),
 			NoResponderFound.Error()+" for method Get, but one matches method GET") {
 			t.Fatal(err)
 		}
@@ -74,7 +74,7 @@ func TestMockTransport(t *testing.T) {
 		if err == nil {
 			t.Fatal("An error should occur")
 		}
-		if !strings.Contains(err.Error(),
+		if !strings.HasSuffix(err.Error(),
 			NoResponderFound.Error()+" for method POST, but one matches method GET") {
 			t.Fatal(err)
 		}
@@ -88,7 +88,7 @@ func TestMockTransport(t *testing.T) {
 		if err == nil {
 			t.Fatal("An error should occur")
 		}
-		if !strings.Contains(err.Error(),
+		if !strings.HasSuffix(err.Error(),
 			NoResponderFound.Error()+" for method POST, but one matches method GET") {
 			t.Fatal(err)
 		}
@@ -182,8 +182,27 @@ func TestMockTransportNoResponder(t *testing.T) {
 	if err != nil {
 		t.Fatal("expected request to succeed")
 	}
-
 	assertBody(t, resp, "hello world")
+
+	// Using NewNotFoundResponder()
+	RegisterNoResponder(NewNotFoundResponder(nil))
+	_, err = http.Get(testURL)
+	if err == nil {
+		t.Fatal("an error should occur")
+	}
+	if !strings.HasSuffix(err.Error(), "Responder not found for GET http://www.example.com/") {
+		t.Fatalf("Unexpected error content: %s", err)
+	}
+
+	// Help the user in case a Responder exists for another method
+	RegisterResponder("POST", testURL, NewStringResponder(200, "hello world"))
+	_, err = http.Get(testURL)
+	if err == nil {
+		t.Fatal("an error should occur")
+	}
+	if !strings.HasSuffix(err.Error(), "Responder not found for GET http://www.example.com/, but one matches method POST") {
+		t.Fatalf("Unexpected error content: %s", err)
+	}
 }
 
 func TestMockTransportQuerystringFallback(t *testing.T) {
