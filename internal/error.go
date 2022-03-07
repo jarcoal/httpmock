@@ -9,31 +9,27 @@ import (
 // given HTTP method and URL.
 var NoResponderFound = errors.New("no responder found") // nolint: revive
 
-// errorNoResponderFoundMethodCase encapsulates a NoResponderFound
-// error probably due to the method not upper-cased.
-type ErrorNoResponderFoundWrongMethod struct {
-	orig      string // original wrong method, without any matching responder
-	suggested string // suggested method with a matching responder
+// ErrorNoResponderFoundMistake encapsulates a NoResponderFound
+// error probably due to a user error on the method or URL path.
+type ErrorNoResponderFoundMistake struct {
+	Kind      string // "method" or "URL"
+	Orig      string // original wrong method/URL, without any matching responder
+	Suggested string // suggested method/URL with a matching responder
 }
 
-// NewErrorNoResponderFoundWrongMethod returns an ErrorNoResponderFoundWrongMethod.
-func NewErrorNoResponderFoundWrongMethod(orig, suggested string) error {
-	return &ErrorNoResponderFoundWrongMethod{
-		orig:      orig,
-		suggested: suggested,
-	}
-}
+var _ error = (*ErrorNoResponderFoundMistake)(nil)
 
 // Unwrap implements the interface needed by errors.Unwrap.
-func (e *ErrorNoResponderFoundWrongMethod) Unwrap() error {
+func (e *ErrorNoResponderFoundMistake) Unwrap() error {
 	return NoResponderFound
 }
 
 // Error implements error interface.
-func (e *ErrorNoResponderFoundWrongMethod) Error() string {
-	return fmt.Sprintf("%s for method %s, but one matches method %s",
+func (e *ErrorNoResponderFoundMistake) Error() string {
+	return fmt.Sprintf("%[1]s for %[2]s %[3]q, but one matches %[2]s %[4]q",
 		NoResponderFound,
-		e.orig,
-		e.suggested,
+		e.Kind,
+		e.Orig,
+		e.Suggested,
 	)
 }

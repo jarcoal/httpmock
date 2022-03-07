@@ -24,7 +24,7 @@ func TestMockTransport(t *testing.T) {
 	Activate()
 	defer Deactivate()
 
-	url := "https://github.com/"
+	url := "https://github.com/foo/bar"
 	body := `["hello world"]` + "\n"
 
 	RegisterResponder("GET", url, NewStringResponder(200, body))
@@ -61,7 +61,7 @@ func TestMockTransport(t *testing.T) {
 			t.Fatal("An error should occur")
 		}
 		if !strings.HasSuffix(err.Error(),
-			NoResponderFound.Error()+" for method Get, but one matches method GET") {
+			NoResponderFound.Error()+` for method "Get", but one matches method "GET"`) {
 			t.Fatal(err)
 		}
 
@@ -75,7 +75,7 @@ func TestMockTransport(t *testing.T) {
 			t.Fatal("An error should occur")
 		}
 		if !strings.HasSuffix(err.Error(),
-			NoResponderFound.Error()+" for method POST, but one matches method GET") {
+			NoResponderFound.Error()+` for method "POST", but one matches method "GET"`) {
 			t.Fatal(err)
 		}
 
@@ -89,7 +89,27 @@ func TestMockTransport(t *testing.T) {
 			t.Fatal("An error should occur")
 		}
 		if !strings.HasSuffix(err.Error(),
-			NoResponderFound.Error()+" for method POST, but one matches method GET") {
+			NoResponderFound.Error()+` for method "POST", but one matches method "GET"`) {
+			t.Fatal(err)
+		}
+
+		// Use a URL with squashable "/" in path
+		_, err = http.Get("https://github.com////foo//bar")
+		if err == nil {
+			t.Fatal("An error should occur")
+		}
+		if !strings.HasSuffix(err.Error(),
+			NoResponderFound.Error()+` for URL "https://github.com////foo//bar", but one matches URL "https://github.com/foo/bar"`) {
+			t.Fatal(err)
+		}
+
+		// Use a URL terminated by "/"
+		_, err = http.Get("https://github.com/foo/bar/")
+		if err == nil {
+			t.Fatal("An error should occur")
+		}
+		if !strings.HasSuffix(err.Error(),
+			NoResponderFound.Error()+` for URL "https://github.com/foo/bar/", but one matches URL "https://github.com/foo/bar"`) {
 			t.Fatal(err)
 		}
 	}()
@@ -194,13 +214,33 @@ func TestMockTransportNoResponder(t *testing.T) {
 		t.Fatalf("Unexpected error content: %s", err)
 	}
 
+	const url = "http://www.example.com/foo/bar"
+	RegisterResponder("POST", url, NewStringResponder(200, "hello world"))
+
 	// Help the user in case a Responder exists for another method
-	RegisterResponder("POST", testURL, NewStringResponder(200, "hello world"))
-	_, err = http.Get(testURL)
+	_, err = http.Get(url)
 	if err == nil {
 		t.Fatal("an error should occur")
 	}
-	if !strings.HasSuffix(err.Error(), "Responder not found for GET http://www.example.com/, but one matches method POST") {
+	if !strings.HasSuffix(err.Error(), `Responder not found for GET `+url+`, but one matches method "POST"`) {
+		t.Fatalf("Unexpected error content: %s", err)
+	}
+
+	// Help the user in case a Responder exists for another path without final "/"
+	_, err = http.Post(url+"/", "", nil)
+	if err == nil {
+		t.Fatal("an error should occur")
+	}
+	if !strings.HasSuffix(err.Error(), `Responder not found for POST `+url+`/, but one matches URL "`+url+`"`) {
+		t.Fatalf("Unexpected error content: %s", err)
+	}
+
+	// Help the user in case a Responder exists for another path without double "/"
+	_, err = http.Post("http://www.example.com///foo//bar", "", nil)
+	if err == nil {
+		t.Fatal("an error should occur")
+	}
+	if !strings.HasSuffix(err.Error(), `Responder not found for POST http://www.example.com///foo//bar, but one matches URL "`+url+`"`) {
 		t.Fatalf("Unexpected error content: %s", err)
 	}
 }
