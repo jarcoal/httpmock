@@ -23,10 +23,15 @@ type fromThenKeyType struct{}
 
 var fromThenKey = fromThenKeyType{}
 
-// suggestedMethodKeyType is used by NewNotFoundResponder().
-type suggestedMethodKeyType struct{}
+type suggestedInfo struct {
+	kind      string
+	suggested string
+}
 
-var suggestedMethodKey = suggestedMethodKeyType{}
+// suggestedMethodKeyType is used by NewNotFoundResponder().
+type suggestedKeyType struct{}
+
+var suggestedKey = suggestedKeyType{}
 
 // Responder is a callback that receives an http request and returns
 // a mocked response.
@@ -336,13 +341,14 @@ func NewErrorResponder(err error) Responder {
 //         at /go/src/runtime/asm_amd64.s:1337
 func NewNotFoundResponder(fn func(...interface{})) Responder {
 	return func(req *http.Request) (*http.Response, error) {
-		suggestedMethod, _ := req.Context().Value(suggestedMethodKey).(string)
-		if suggestedMethod != "" {
-			suggestedMethod = ", but one matches method " + suggestedMethod
+		var extra string
+		suggested, _ := req.Context().Value(suggestedKey).(*suggestedInfo)
+		if suggested != nil {
+			extra = fmt.Sprintf(`, but one matches %s %q`, suggested.kind, suggested.suggested)
 		}
 		return nil, internal.StackTracer{
 			CustomFn: fn,
-			Err:      fmt.Errorf("Responder not found for %s %s%s", req.Method, req.URL, suggestedMethod),
+			Err:      fmt.Errorf("Responder not found for %s %s%s", req.Method, req.URL, extra),
 		}
 	}
 }

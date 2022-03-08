@@ -177,13 +177,16 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		method = http.MethodGet
 	}
 
-	var suggestedMethod string
+	var suggested *internal.ErrorNoResponderFoundMistake
 
 	responder, key, respKey, submatches := m.findResponder(method, req.URL)
 	if responder == nil {
-		// Responder not found, try to detect some common user mistakes on method
+		// Responder not found, try to detect some common user mistakes on
+		// method then on path
 		var altResp Responder
 		var altKey internal.RouteKey
+
+		// On method first
 		if methodProbablyWrong(method) {
 			// Get → GET
 			altResp, _, altKey, _ = m.findResponder(strings.ToUpper(method), req.URL)
@@ -193,7 +196,43 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			altResp, _, altKey, _ = m.findResponder("", req.URL)
 		}
 		if altResp != nil {
-			suggestedMethod = altKey.Method
+			suggested = &internal.ErrorNoResponderFoundMistake{
+				Kind:      "method",
+				Orig:      method,
+				Suggested: altKey.Method,
+			}
+		} else {
+			// Then on path
+			if altResp == nil && strings.HasSuffix(req.URL.Path, "/") {
+				// Try without final "/"
+				u := *req.URL
+				u.Path = strings.TrimSuffix(u.Path, "/")
+				altResp, _, altKey, _ = m.findResponder("", &u)
+			}
+			if altResp == nil && strings.Contains(req.URL.Path, "//") {
+				// Try without double "/"
+				u := *req.URL
+				squash := false
+				u.Path = strings.Map(func(r rune) rune {
+					if r == '/' {
+						if squash {
+							return -1
+						}
+						squash = true
+					} else {
+						squash = false
+					}
+					return r
+				}, u.Path)
+				altResp, _, altKey, _ = m.findResponder("", &u)
+			}
+			if altResp != nil {
+				suggested = &internal.ErrorNoResponderFoundMistake{
+					Kind:      "URL",
+					Orig:      req.URL.String(),
+					Suggested: altKey.URL,
+				}
+			}
 		}
 	}
 
@@ -209,17 +248,22 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// we didn't find a responder, so fire the 'no responder' responder
 		m.callCountInfo[internal.NoResponder]++
 		m.totalCallCount++
-		// give a hint to NewNotFoundResponder() if it is a possible method error
-		if suggestedMethod != "" {
-			req = req.WithContext(context.WithValue(req.Context(), suggestedMethodKey, suggestedMethod))
+
+		// give a hint to NewNotFoundResponder() if it is a possible
+		// method or URL error
+		if suggested != nil {
+			req = req.WithContext(context.WithValue(req.Context(), suggestedKey, &suggestedInfo{
+				kind:      suggested.Kind,
+				suggested: suggested.Suggested,
+			}))
 		}
 		responder = m.noResponder
 	}
 	m.mu.Unlock()
 
 	if responder == nil {
-		if suggestedMethod != "" {
-			return nil, internal.NewErrorNoResponderFoundWrongMethod(method, suggestedMethod)
+		if suggested != nil {
+			return nil, suggested
 		}
 		return ConnectionFailure(req)
 	}
