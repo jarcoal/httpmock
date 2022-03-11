@@ -13,14 +13,14 @@ import (
 var _ json.Marshaler = httpmock.File("test.json")
 
 func TestFile(t *testing.T) {
-	dir, cleanup := tmpDir(t)
-	defer cleanup()
-
 	assert := td.Assert(t)
+
+	dir, cleanup := tmpDir(assert)
+	defer cleanup()
 
 	assert.Run("Valid JSON file", func(assert *td.T) {
 		okFile := filepath.Join(dir, "ok.json")
-		writeFile(t, okFile, []byte(`{ "test": true }`))
+		writeFile(assert, okFile, []byte(`{ "test": true }`))
 
 		encoded, err := json.Marshal(httpmock.File(okFile))
 		if !assert.CmpNoError(err, "json.Marshal(%s)", okFile) {
@@ -37,7 +37,7 @@ func TestFile(t *testing.T) {
 
 	assert.Run("Invalid JSON file", func(assert *td.T) {
 		badFile := filepath.Join(dir, "bad.json")
-		writeFile(t, badFile, []byte(`[123`))
+		writeFile(assert, badFile, []byte(`[123`))
 
 		_, err := json.Marshal(httpmock.File(badFile))
 		assert.CmpError(err, "json.Marshal(%s), error expected", badFile)
@@ -46,7 +46,7 @@ func TestFile(t *testing.T) {
 	assert.Run("Bytes", func(assert *td.T) {
 		file := filepath.Join(dir, "ok.raw")
 		content := []byte(`abc123`)
-		writeFile(t, file, content)
+		writeFile(assert, file, content)
 
 		assert.Cmp(httpmock.File(file).Bytes(), content)
 	})
@@ -60,7 +60,7 @@ func TestFile(t *testing.T) {
 	assert.Run("String", func(assert *td.T) {
 		file := filepath.Join(dir, "ok.txt")
 		content := `abc123`
-		writeFile(t, file, []byte(content))
+		writeFile(assert, file, []byte(content))
 
 		assert.Cmp(httpmock.File(file).String(), content)
 	})

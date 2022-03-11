@@ -173,6 +173,8 @@ func TestMockTransportNoResponder(t *testing.T) {
 }
 
 func TestMockTransportQuerystringFallback(t *testing.T) {
+	assert := td.Assert(t)
+
 	Activate()
 	defer DeactivateAndReset()
 
@@ -180,7 +182,7 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 	RegisterResponder("GET", testURL, NewStringResponder(200, "hello world"))
 
 	for _, suffix := range []string{"?", "?hello=world", "?hello=world#foo", "?hello=world&hello=all", "#foo"} {
-		td.Assert(t).RunAssertRequire(suffix, func(assert, require *td.T) {
+		assert.RunAssertRequire(suffix, func(assert, require *td.T) {
 			reqURL := testURL + suffix
 
 			// make a request for the testURL with a querystring
@@ -370,7 +372,7 @@ func TestMockTransportInitialTransport(t *testing.T) {
 
 	Activate()
 
-	td.Cmp(t, http.DefaultTransport, td.Not(td.Shallow(tripper)),
+	td.CmpNot(t, http.DefaultTransport, td.Shallow(tripper),
 		"expected http.DefaultTransport to be a mock transport")
 
 	Deactivate()
@@ -489,8 +491,8 @@ func TestMockTransportRespectsCancel(t *testing.T) {
 
 			resp, err := http.DefaultClient.Do(req)
 
-			// If we expect an error but none was returned, it's fatal for this test...
 			if c.expectedErr != nil {
+				// err is a *url.Error here, so with a Err field
 				assert.Cmp(err, td.Smuggle("Err", td.String(c.expectedErr.Error())))
 			} else {
 				assert.CmpNoError(err)

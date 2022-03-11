@@ -38,8 +38,8 @@ func TestResponderFromResponse(t *testing.T) {
 	require.CmpNoError(err)
 
 	// Body should be the same for both responses
-	assertBody(t, response1, "hello world")
-	assertBody(t, response2, "hello world")
+	assertBody(assert, response1, "hello world")
+	assertBody(assert, response2, "hello world")
 
 	// Request should be non-nil and different for each response
 	require.NotNil(response1.Request)
@@ -76,8 +76,8 @@ func TestResponderFromResponses(t *testing.T) {
 	require.CmpNoError(err)
 
 	// Body should be the same for both responses
-	assertBody(t, response1, `{"test":"toto"}`)
-	assertBody(t, response2, "hello world")
+	assertBody(assert, response1, `{"test":"toto"}`)
+	assertBody(assert, response2, "hello world")
 
 	// Request should be non-nil and different for each response
 	require.NotNil(response1.Request)
@@ -166,7 +166,7 @@ func TestNewJsonResponse(t *testing.T) {
 		Hello string `json:"hello"`
 	}
 
-	dir, cleanup := tmpDir(t)
+	dir, cleanup := tmpDir(assert)
 	defer cleanup()
 	fileName := filepath.Join(dir, "ok.json")
 	writeFile(assert, fileName, []byte(`{ "test": true }`))
@@ -178,14 +178,15 @@ func TestNewJsonResponse(t *testing.T) {
 		{body: &schema{"world"}, expected: `{"hello":"world"}`},
 		{body: File(fileName), expected: `{"test":true}`},
 	} {
-		response, err := NewJsonResponse(200, test.body)
-		if !assert.CmpNoError(err, "#%d", i) ||
-			!assert.Cmp(response.StatusCode, 200, "#%d", i) ||
-			!assert.Cmp(response.Header.Get("Content-Type"), "application/json", "#%d", i) {
-			continue
-		}
-
-		assertBody(assert, response, test.expected)
+		assert.Run(fmt.Sprintf("#%d", i), func(assert *td.T) {
+			response, err := NewJsonResponse(200, test.body)
+			if !assert.CmpNoError(err) {
+				return
+			}
+			assert.Cmp(response.StatusCode, 200)
+			assert.Cmp(response.Header.Get("Content-Type"), "application/json")
+			assertBody(assert, response, test.expected)
+		})
 	}
 
 	// Error case
@@ -194,21 +195,23 @@ func TestNewJsonResponse(t *testing.T) {
 	assert.Nil(response)
 }
 
-func checkResponder(t testing.TB, r Responder, expectedStatus int, expectedBody string) {
-	helper(t).Helper()
+func checkResponder(assert *td.T, r Responder, expectedStatus int, expectedBody string) {
+	assert.Helper()
 
-	req, _ := http.NewRequest(http.MethodGet, "/foo", nil)
+	req, err := http.NewRequest(http.MethodGet, "/foo", nil)
+	assert.FailureIsFatal().CmpNoError(err)
+
 	resp, err := r(req)
-	if !td.CmpNoError(t, err, "Responder returned no error") {
+	if !assert.CmpNoError(err, "Responder returned no error") {
 		return
 	}
 
-	if !td.CmpNotNil(t, resp, "Responder returned a non-nil response") {
+	if !assert.NotNil(resp, "Responder returned a non-nil response") {
 		return
 	}
 
-	td.Cmp(t, resp.StatusCode, expectedStatus, "Status code is OK")
-	assertBody(t, resp, expectedBody)
+	assert.Cmp(resp.StatusCode, expectedStatus, "Status code is OK")
+	assertBody(assert, resp, expectedBody)
 }
 
 func TestNewJsonResponder(t *testing.T) {
@@ -222,7 +225,7 @@ func TestNewJsonResponder(t *testing.T) {
 	})
 
 	assert.Run("OK file", func(assert *td.T) {
-		dir, cleanup := tmpDir(t)
+		dir, cleanup := tmpDir(assert)
 		defer cleanup()
 		fileName := filepath.Join(dir, "ok.json")
 		writeFile(assert, fileName, []byte(`{  "foo"  :  42  }`))
@@ -269,7 +272,7 @@ func TestNewXmlResponse(t *testing.T) {
 	}
 	expectedBody := string(b)
 
-	dir, cleanup := tmpDir(t)
+	dir, cleanup := tmpDir(assert)
 	defer cleanup()
 	fileName := filepath.Join(dir, "ok.xml")
 	writeFile(assert, fileName, b)
@@ -281,14 +284,15 @@ func TestNewXmlResponse(t *testing.T) {
 		{body: body, expected: expectedBody},
 		{body: File(fileName), expected: expectedBody},
 	} {
-		response, err := NewXmlResponse(200, test.body)
-		if !assert.CmpNoError(err, "#%d", i) ||
-			!assert.Cmp(response.StatusCode, 200, "#%d", i) ||
-			!assert.Cmp(response.Header.Get("Content-Type"), "application/xml", "#%d", i) {
-			continue
-		}
-
-		assertBody(assert, response, test.expected)
+		assert.Run(fmt.Sprintf("#%d", i), func(assert *td.T) {
+			response, err := NewXmlResponse(200, test.body)
+			if !assert.CmpNoError(err) {
+				return
+			}
+			assert.Cmp(response.StatusCode, 200)
+			assert.Cmp(response.Header.Get("Content-Type"), "application/xml")
+			assertBody(assert, response, test.expected)
+		})
 	}
 
 	// Error case
@@ -314,7 +318,7 @@ func TestNewXmlResponder(t *testing.T) {
 	})
 
 	assert.Run("OK file", func(assert *td.T) {
-		dir, cleanup := tmpDir(t)
+		dir, cleanup := tmpDir(assert)
 		defer cleanup()
 		fileName := filepath.Join(dir, "ok.xml")
 		writeFile(assert, fileName, b)
@@ -349,7 +353,6 @@ func TestNewXmlResponder(t *testing.T) {
 func TestNewErrorResponder(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
-	// From go1.13, a stack frame is stored into errors issued by errors.New()
 	origError := errors.New("oh no")
 	responder := NewErrorResponder(origError)
 
@@ -415,9 +418,9 @@ func TestResponder(t *testing.T) {
 	resp := &http.Response{}
 
 	chk := func(r Responder, expectedResp *http.Response, expectedErr string) {
-		helper(t).Helper()
+		t.Helper()
 		gotResp, gotErr := r(req)
-		td.Cmp(t, gotResp, expectedResp)
+		td.CmpShallow(t, gotResp, expectedResp)
 		var gotErrStr string
 		if gotErr != nil {
 			gotErrStr = gotErr.Error()
@@ -427,14 +430,14 @@ func TestResponder(t *testing.T) {
 	called := false
 	chkNotCalled := func() {
 		if called {
-			helper(t).Helper()
+			t.Helper()
 			t.Errorf("Original responder should not be called")
 			called = false
 		}
 	}
 	chkCalled := func() {
 		if !called {
-			helper(t).Helper()
+			t.Helper()
 			t.Errorf("Original responder should be called")
 		}
 		called = false
@@ -524,7 +527,7 @@ func TestResponder_Then(t *testing.T) {
 	}
 	var rt Responder
 	chk := func(assert *td.T, expectedLevel, expectedStack string) {
-		helper(assert).Helper()
+		assert.Helper()
 		resp, err := rt(req)
 		if !assert.CmpNoError(err, "Responder call") {
 			return

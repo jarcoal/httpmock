@@ -10,7 +10,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.7.x, 1.8.x, 1.9.x, 1.10.x, 1.11.x, 1.12.x, 1.13.x, 1.14.x, 1.15.x, 1.16.x, tip]
+        go-version: [1.9.x, 1.10.x, 1.11.x, 1.12.x, 1.13.x, 1.14.x, 1.15.x, 1.16.x, tip]
         full-tests: [false]
         include:
           - go-version: 1.17.x
@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: Setup go
         run: |
-          curl -sL https://raw.githubusercontent.com/maxatome/install-go/v3.0/install-go.pl |
+          curl -sL https://raw.githubusercontent.com/maxatome/install-go/v3.3/install-go.pl |
               perl - ${{ matrix.go-version }} $HOME/go
 
       - name: Checkout code
@@ -31,7 +31,7 @@ jobs:
         if: matrix.full-tests
         run: |
           curl -sL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh |
-              sh -s -- -b $HOME/go/bin v1.43.0
+              sh -s -- -b $HOME/go/bin v1.44.2
           $HOME/go/bin/golangci-lint run --max-issues-per-linter 0 \
                                          --max-same-issues 0 \
                                          -E bidichk \
@@ -55,11 +55,12 @@ jobs:
               GO_TEST_OPTS="-covermode=atomic -coverprofile=coverage.out"
           fi
           case ${{ matrix.go-version }} in
-              1.[789].x | 1.10.x) # Before go 1.11, go modules are not available
+              1.9.x | 1.10.x) # Before go 1.11, go modules are not available
                   mkdir -p ../src/github.com/$GITHUB_REPOSITORY_OWNER
                   ln -s $(pwd) ../src/github.com/$GITHUB_REPOSITORY
                   export GOPATH=$(dirname $(pwd))
                   cd $GOPATH/src/github.com/$GITHUB_REPOSITORY
+                  go get -t ./...
                   ;;
           esac
           export GORACE="halt_on_error=1"
