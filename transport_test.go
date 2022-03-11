@@ -357,6 +357,15 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 				testURL + "hello/world",
 			},
 		},
+		{
+			Responder: "/hello%2fworl%64",
+			Paths: []string{
+				testURL + "hello%2fworl%64?query=string&abc=zz#fragment",
+				testURL + "hello%2fworl%64?query=string&abc=zz",
+				testURL + "hello%2fworl%64#fragment",
+				testURL + "hello%2fworl%64",
+			},
+		},
 		// Regexp cases
 		{
 			Responder: `=~^http://.*/hello/.*ld\z`,

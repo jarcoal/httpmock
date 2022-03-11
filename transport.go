@@ -135,7 +135,10 @@ func (m *MockTransport) findResponder(method string, url *url.URL) (
 
 		// if we weren't able to find a responder for the full URL, try with
 		// the path part only
-		pathAlone := url.Path
+		pathAlone := url.RawPath
+		if pathAlone == "" {
+			pathAlone = url.Path
+		}
 
 		// First with unsorted querystring: /path?q...
 		if hasQueryString {
