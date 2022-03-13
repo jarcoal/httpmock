@@ -124,15 +124,35 @@ func TestMockTransportReset(t *testing.T) {
 
 	td.CmpZero(t, DefaultTransport.NumResponders(),
 		"expected no responders at this point")
+	td.Cmp(t, DefaultTransport.Responders(), []string{})
 
-	RegisterResponder("GET", testURL, NewStringResponder(200, "hey"))
+	r := NewStringResponder(200, "hey")
 
-	td.Cmp(t, DefaultTransport.NumResponders(), 1, "expected one responder")
+	RegisterResponder("GET", testURL, r)
+	RegisterResponder("POST", testURL, r)
+	RegisterResponder("PATCH", testURL, r)
+	RegisterResponder("GET", "/pipo/bingo", r)
+
+	RegisterResponder("GET", "=~/pipo/bingo", r)
+	RegisterResponder("GET", "=~/bingo/pipo", r)
+
+	td.Cmp(t, DefaultTransport.NumResponders(), 6, "expected one responder")
+	td.Cmp(t, DefaultTransport.Responders(), []string{
+		// Sorted by URL then method
+		"GET /pipo/bingo",
+		"GET " + testURL,
+		"PATCH " + testURL,
+		"POST " + testURL,
+		// Regexp responders, in the same order they have been registered
+		"GET =~/pipo/bingo",
+		"GET =~/bingo/pipo",
+	})
 
 	Reset()
 
 	td.CmpZero(t, DefaultTransport.NumResponders(),
 		"expected no responders as they were just reset")
+	td.Cmp(t, DefaultTransport.Responders(), []string{})
 }
 
 func TestMockTransportNoResponder(t *testing.T) {

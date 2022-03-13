@@ -274,10 +274,43 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // NumResponders returns the number of responders currently in use.
+// The responder registered with RegisterNoResponder() is not taken
+// into account.
 func (m *MockTransport) NumResponders() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.responders) + len(m.regexpResponders)
+}
+
+// Responders returns the list of currently registered responders.
+// Each responder is listed as a string containing "METHOD URL".
+// Non-regexp responders are listed first in alphabetical order
+// (sorted by URL then METHOD), then regexp responders in the order
+// they have been registered.
+// The responder registered with RegisterNoResponder() is not listed.
+func (m *MockTransport) Responders() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	rks := make([]internal.RouteKey, 0, len(m.responders))
+	for rk := range m.responders {
+		rks = append(rks, rk)
+	}
+	sort.Slice(rks, func(i, j int) bool {
+		if rks[i].URL == rks[j].URL {
+			return rks[i].Method < rks[j].Method
+		}
+		return rks[i].URL < rks[j].URL
+	})
+
+	rs := make([]string, 0, len(m.responders)+len(m.regexpResponders))
+	for _, rk := range rks {
+		rs = append(rs, rk.String())
+	}
+	for _, rr := range m.regexpResponders {
+		rs = append(rs, rr.method+" "+rr.origRx)
+	}
+	return rs
 }
 
 func runCancelable(responder Responder, req *http.Request) (*http.Response, error) {
@@ -383,6 +416,7 @@ func (m *MockTransport) regexpResponderForKey(key internal.RouteKey) (Responder,
 func isRegexpURL(url string) bool {
 	return strings.HasPrefix(url, regexpPrefix)
 }
+
 func (m *MockTransport) checkMethod(method string) {
 	if !m.DontCheckMethod && methodProbablyWrong(method) {
 		panic(fmt.Sprintf("You probably want to use method %q instead of %q? If not and so want to disable this check, set MockTransport.DontCheckMethod field to true",
@@ -726,9 +760,8 @@ func (m *MockTransport) GetCallCountInfo() map[string]int {
 // GetTotalCallCount returns the totalCallCount.
 func (m *MockTransport) GetTotalCallCount() int {
 	m.mu.RLock()
-	count := m.totalCallCount
-	m.mu.RUnlock()
-	return count
+	defer m.mu.RUnlock()
+	return m.totalCallCount
 }
 
 // DefaultTransport is the default mock transport used by Activate,
