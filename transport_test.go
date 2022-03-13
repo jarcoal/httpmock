@@ -5,14 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
-	"reflect"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/maxatome/go-testdeep/td"
 
 	. "github.com/jarcoal/httpmock"
 	"github.com/jarcoal/httpmock/internal"
@@ -30,124 +31,78 @@ func TestMockTransport(t *testing.T) {
 	RegisterResponder("GET", url, NewStringResponder(200, body))
 	RegisterResponder("GET", `=~/xxx\z`, NewStringResponder(200, body))
 
+	assert := td.Assert(t)
+
 	// Read it as a simple string (ioutil.ReadAll of assertBody will
 	// trigger io.EOF)
-	func() {
+	assert.RunAssertRequire("simple", func(assert, require *td.T) {
 		resp, err := http.Get(url)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !assertBody(t, resp, body) {
-			t.FailNow()
-		}
+		require.CmpNoError(err)
+		assertBody(assert, resp, body)
 
 		// the http client wraps our NoResponderFound error, so we just try and match on text
 		_, err = http.Get(testURL)
-		if err == nil {
-			t.Fatal("An error should occur")
-		}
-		if !strings.HasSuffix(err.Error(), NoResponderFound.Error()) {
-			t.Fatal(err)
-		}
+		assert.HasSuffix(err, NoResponderFound.Error())
 
 		// Use wrongly cased method, the error should warn us
 		req, err := http.NewRequest("Get", url, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.CmpNoError(err)
+
 		c := http.Client{}
 		_, err = c.Do(req)
-		if err == nil {
-			t.Fatal("An error should occur")
-		}
-		if !strings.HasSuffix(err.Error(),
-			NoResponderFound.Error()+` for method "Get", but one matches method "GET"`) {
-			t.Fatal(err)
-		}
+		assert.HasSuffix(err, NoResponderFound.Error()+` for method "Get", but one matches method "GET"`)
 
 		// Use POST instead of GET, the error should warn us
 		req, err = http.NewRequest("POST", url, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.CmpNoError(err)
+
 		_, err = c.Do(req)
-		if err == nil {
-			t.Fatal("An error should occur")
-		}
-		if !strings.HasSuffix(err.Error(),
-			NoResponderFound.Error()+` for method "POST", but one matches method "GET"`) {
-			t.Fatal(err)
-		}
+		assert.HasSuffix(err, NoResponderFound.Error()+` for method "POST", but one matches method "GET"`)
 
 		// Same using a regexp responder
 		req, err = http.NewRequest("POST", "http://pipo.com/xxx", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.CmpNoError(err)
+
 		_, err = c.Do(req)
-		if err == nil {
-			t.Fatal("An error should occur")
-		}
-		if !strings.HasSuffix(err.Error(),
-			NoResponderFound.Error()+` for method "POST", but one matches method "GET"`) {
-			t.Fatal(err)
-		}
+		assert.HasSuffix(err, NoResponderFound.Error()+` for method "POST", but one matches method "GET"`)
 
 		// Use a URL with squashable "/" in path
 		_, err = http.Get("https://github.com////foo//bar")
-		if err == nil {
-			t.Fatal("An error should occur")
-		}
-		if !strings.HasSuffix(err.Error(),
-			NoResponderFound.Error()+` for URL "https://github.com////foo//bar", but one matches URL "https://github.com/foo/bar"`) {
-			t.Fatal(err)
-		}
+		assert.HasSuffix(err, NoResponderFound.Error()+` for URL "https://github.com////foo//bar", but one matches URL "https://github.com/foo/bar"`)
 
 		// Use a URL terminated by "/"
 		_, err = http.Get("https://github.com/foo/bar/")
-		if err == nil {
-			t.Fatal("An error should occur")
-		}
-		if !strings.HasSuffix(err.Error(),
-			NoResponderFound.Error()+` for URL "https://github.com/foo/bar/", but one matches URL "https://github.com/foo/bar"`) {
-			t.Fatal(err)
-		}
-	}()
+		assert.HasSuffix(err, NoResponderFound.Error()+` for URL "https://github.com/foo/bar/", but one matches URL "https://github.com/foo/bar"`)
+	})
 
 	// Do it again, but twice with json decoder (json Decode will not
 	// reach EOF, but Close is called as the JSON response is complete)
-	for i := 0; i < 2; i++ {
-		func() {
+	for i := 1; i <= 2; i++ {
+		assert.RunAssertRequire(fmt.Sprintf("try #%d", i), func(assert, require *td.T) {
 			resp, err := http.Get(url)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.CmpNoError(err)
 			defer resp.Body.Close()
 
 			var res []string
 			err = json.NewDecoder(resp.Body).Decode(&res)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.CmpNoError(err)
 
-			if len(res) != 1 || res[0] != "hello world" {
-				t.Fatalf(`%v read instead of ["hello world"]`, res)
-			}
-		}()
+			assert.Cmp(res, []string{"hello world"})
+		})
 	}
 }
 
 // We should be able to find GET handlers when using an http.Request with a
 // default (zero-value) .Method.
 func TestMockTransportDefaultMethod(t *testing.T) {
+	assert, require := td.AssertRequire(t)
+
 	Activate()
 	defer Deactivate()
 
 	const urlString = "https://github.com/"
 	url, err := url.Parse(urlString)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 	body := "hello world"
 
 	RegisterResponder("GET", urlString, NewStringResponder(200, body))
@@ -159,31 +114,25 @@ func TestMockTransportDefaultMethod(t *testing.T) {
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 
-	assertBody(t, resp, body)
+	assertBody(assert, resp, body)
 }
 
 func TestMockTransportReset(t *testing.T) {
 	DeactivateAndReset()
 
-	if DefaultTransport.NumResponders() > 0 {
-		t.Fatal("expected no responders at this point")
-	}
+	td.CmpZero(t, DefaultTransport.NumResponders(),
+		"expected no responders at this point")
 
 	RegisterResponder("GET", testURL, NewStringResponder(200, "hey"))
 
-	if DefaultTransport.NumResponders() != 1 {
-		t.Fatal("expected one responder")
-	}
+	td.Cmp(t, DefaultTransport.NumResponders(), 1, "expected one responder")
 
 	Reset()
 
-	if DefaultTransport.NumResponders() > 0 {
-		t.Fatal("expected no responders as they were just reset")
-	}
+	td.CmpZero(t, DefaultTransport.NumResponders(),
+		"expected no responders as they were just reset")
 }
 
 func TestMockTransportNoResponder(t *testing.T) {
@@ -192,60 +141,40 @@ func TestMockTransportNoResponder(t *testing.T) {
 
 	Reset()
 
-	if _, err := http.Get(testURL); err == nil {
-		t.Fatal("expected to receive a connection error due to lack of responders")
-	}
+	_, err := http.Get(testURL)
+	td.CmpError(t, err, "expected to receive a connection error due to lack of responders")
 
 	RegisterNoResponder(NewStringResponder(200, "hello world"))
 
 	resp, err := http.Get(testURL)
-	if err != nil {
-		t.Fatal("expected request to succeed")
+	if td.CmpNoError(t, err, "expected request to succeed") {
+		assertBody(t, resp, "hello world")
 	}
-	assertBody(t, resp, "hello world")
 
 	// Using NewNotFoundResponder()
 	RegisterNoResponder(NewNotFoundResponder(nil))
 	_, err = http.Get(testURL)
-	if err == nil {
-		t.Fatal("an error should occur")
-	}
-	if !strings.HasSuffix(err.Error(), "Responder not found for GET http://www.example.com/") {
-		t.Fatalf("Unexpected error content: %s", err)
-	}
+	td.CmpHasSuffix(t, err, "Responder not found for GET http://www.example.com/")
 
 	const url = "http://www.example.com/foo/bar"
 	RegisterResponder("POST", url, NewStringResponder(200, "hello world"))
 
 	// Help the user in case a Responder exists for another method
 	_, err = http.Get(url)
-	if err == nil {
-		t.Fatal("an error should occur")
-	}
-	if !strings.HasSuffix(err.Error(), `Responder not found for GET `+url+`, but one matches method "POST"`) {
-		t.Fatalf("Unexpected error content: %s", err)
-	}
+	td.CmpHasSuffix(t, err, `Responder not found for GET `+url+`, but one matches method "POST"`)
 
 	// Help the user in case a Responder exists for another path without final "/"
 	_, err = http.Post(url+"/", "", nil)
-	if err == nil {
-		t.Fatal("an error should occur")
-	}
-	if !strings.HasSuffix(err.Error(), `Responder not found for POST `+url+`/, but one matches URL "`+url+`"`) {
-		t.Fatalf("Unexpected error content: %s", err)
-	}
+	td.CmpHasSuffix(t, err, `Responder not found for POST `+url+`/, but one matches URL "`+url+`"`)
 
 	// Help the user in case a Responder exists for another path without double "/"
 	_, err = http.Post("http://www.example.com///foo//bar", "", nil)
-	if err == nil {
-		t.Fatal("an error should occur")
-	}
-	if !strings.HasSuffix(err.Error(), `Responder not found for POST http://www.example.com///foo//bar, but one matches URL "`+url+`"`) {
-		t.Fatalf("Unexpected error content: %s", err)
-	}
+	td.CmpHasSuffix(t, err, `Responder not found for POST http://www.example.com///foo//bar, but one matches URL "`+url+`"`)
 }
 
 func TestMockTransportQuerystringFallback(t *testing.T) {
+	assert := td.Assert(t)
+
 	Activate()
 	defer DeactivateAndReset()
 
@@ -253,16 +182,15 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 	RegisterResponder("GET", testURL, NewStringResponder(200, "hello world"))
 
 	for _, suffix := range []string{"?", "?hello=world", "?hello=world#foo", "?hello=world&hello=all", "#foo"} {
-		reqURL := testURL + suffix
-		t.Log(reqURL)
+		assert.RunAssertRequire(suffix, func(assert, require *td.T) {
+			reqURL := testURL + suffix
 
-		// make a request for the testURL with a querystring
-		resp, err := http.Get(reqURL)
-		if err != nil {
-			t.Fatalf("expected request %s to succeed", reqURL)
-		}
+			// make a request for the testURL with a querystring
+			resp, err := http.Get(reqURL)
+			require.CmpNoError(err)
 
-		assertBody(t, resp, "hello world")
+			assertBody(assert, resp, "hello world")
+		})
 	}
 }
 
@@ -330,7 +258,7 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 			Responder: "/hello/world?query&abc",
 			Paths: []string{
 				testURL + "hello/world?query&abc",
-				// testURL + "hello/world?abc&query" won' work as "=" is needed, see below
+				// testURL + "hello/world?abc&query" won't work as "=" is needed, see below
 			},
 		},
 		{
@@ -421,12 +349,9 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 
 			// make a request for the testURL with a querystring
 			resp, err := http.Get(reqURL)
-			if err != nil {
-				t.Errorf("%s: expected request %s to succeed", test.Responder, reqURL)
-				continue
+			if td.CmpNoError(t, err) {
+				assertBody(t, resp, "hello world")
 			}
-
-			assertBody(t, resp, "hello world")
 		}
 
 		DeactivateAndReset()
@@ -447,18 +372,18 @@ func TestMockTransportInitialTransport(t *testing.T) {
 
 	Activate()
 
-	if http.DefaultTransport == tripper {
-		t.Fatal("expected http.DefaultTransport to be a mock transport")
-	}
+	td.CmpNot(t, http.DefaultTransport, td.Shallow(tripper),
+		"expected http.DefaultTransport to be a mock transport")
 
 	Deactivate()
 
-	if http.DefaultTransport != tripper {
-		t.Fatal("expected http.DefaultTransport to be dummy")
-	}
+	td.Cmp(t, http.DefaultTransport, td.Shallow(tripper),
+		"expected http.DefaultTransport to be dummy")
 }
 
 func TestMockTransportNonDefault(t *testing.T) {
+	assert, require := td.AssertRequire(t)
+
 	// create a custom http client w/ custom Roundtripper
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -480,19 +405,17 @@ func TestMockTransportNonDefault(t *testing.T) {
 	RegisterResponder("GET", testURL, NewStringResponder(200, body))
 
 	req, err := http.NewRequest("GET", testURL, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 
-	assertBody(t, resp, body)
+	assertBody(assert, resp, body)
 }
 
 func TestMockTransportRespectsCancel(t *testing.T) {
+	assert := td.Assert(t)
+
 	Activate()
 	defer DeactivateAndReset()
 
@@ -531,61 +454,54 @@ func TestMockTransportRespectsCancel(t *testing.T) {
 		{cancelCtx, false, true, "", errors.New(`panic in responder: got "oh no"`)},
 	}
 
-	for _, c := range cases {
-		Reset()
-		if c.withPanic {
-			RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
-				time.Sleep(10 * time.Millisecond)
-				panic("oh no")
-			})
-		} else {
-			RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
-				time.Sleep(10 * time.Millisecond)
-				return NewStringResponse(http.StatusOK, "hello world"), nil
-			})
-		}
-
-		req, err := http.NewRequest("GET", testURL, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		switch c.withCancel {
-		case cancelReq:
-			cancel := make(chan struct{}, 1)
-			req.Cancel = cancel // nolint: staticcheck
-			if c.cancelNow {
-				cancel <- struct{}{}
-			}
-		case cancelCtx:
-			ctx, cancel := context.WithCancel(req.Context())
-			req = req.WithContext(ctx)
-			if c.cancelNow {
-				cancel()
+	for ic, c := range cases {
+		assert.RunAssertRequire(fmt.Sprintf("case #%d", ic), func(assert, require *td.T) {
+			Reset()
+			if c.withPanic {
+				RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
+					time.Sleep(10 * time.Millisecond)
+					panic("oh no")
+				})
 			} else {
-				defer cancel() // avoid ctx leak
+				RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
+					time.Sleep(10 * time.Millisecond)
+					return NewStringResponse(http.StatusOK, "hello world"), nil
+				})
 			}
-		}
 
-		resp, err := http.DefaultClient.Do(req)
+			req, err := http.NewRequest("GET", testURL, nil)
+			require.CmpNoError(err)
 
-		// If we expect an error but none was returned, it's fatal for this test...
-		if err == nil && c.expectedErr != nil {
-			t.Fatal("Error should not be nil")
-		}
-
-		if err != nil {
-			got := err.(*url.Error)
-			// Do not use reflect.DeepEqual as go 1.13 includes stack frames
-			// into errors issued by errors.New()
-			if c.expectedErr == nil || got.Err.Error() != c.expectedErr.Error() {
-				t.Errorf("Expected error: %v, got: %v", c.expectedErr, got.Err)
+			switch c.withCancel {
+			case cancelReq:
+				cancel := make(chan struct{}, 1)
+				req.Cancel = cancel // nolint: staticcheck
+				if c.cancelNow {
+					cancel <- struct{}{}
+				}
+			case cancelCtx:
+				ctx, cancel := context.WithCancel(req.Context())
+				req = req.WithContext(ctx)
+				if c.cancelNow {
+					cancel()
+				} else {
+					defer cancel() // avoid ctx leak
+				}
 			}
-		}
 
-		if c.expectedBody != "" {
-			assertBody(t, resp, c.expectedBody)
-		}
+			resp, err := http.DefaultClient.Do(req)
+
+			if c.expectedErr != nil {
+				// err is a *url.Error here, so with a Err field
+				assert.Cmp(err, td.Smuggle("Err", td.String(c.expectedErr.Error())))
+			} else {
+				assert.CmpNoError(err)
+			}
+
+			if c.expectedBody != "" {
+				assertBody(assert, resp, c.expectedBody)
+			}
+		})
 	}
 }
 
@@ -607,12 +523,12 @@ func TestMockTransportRespectsTimeout(t *testing.T) {
 	)
 
 	_, err := client.Get(testURL)
-	if err == nil {
-		t.Fail()
-	}
+	td.CmpError(t, err)
 }
 
 func TestMockTransportCallCountReset(t *testing.T) {
+	assert, require := td.AssertRequire(t)
+
 	Reset()
 	Activate()
 	defer Deactivate()
@@ -626,53 +542,33 @@ func TestMockTransportCallCountReset(t *testing.T) {
 	RegisterResponder("POST", "=~gitlab", NewStringResponder(200, "body"))
 
 	_, err := http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 
 	buff := new(bytes.Buffer)
 	json.NewEncoder(buff).Encode("{}") // nolint: errcheck
 	_, err = http.Post(url2, "application/json", buff)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 
 	_, err = http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 
-	totalCallCount := GetTotalCallCount()
-	if totalCallCount != 3 {
-		t.Fatalf("did not track the total count of calls correctly. expected it to be 3, but it was %v", totalCallCount)
-	}
-
-	info := GetCallCountInfo()
-	expectedInfo := map[string]int{
+	assert.Cmp(GetTotalCallCount(), 3)
+	assert.Cmp(GetCallCountInfo(), map[string]int{
 		"GET " + url: 2,
 		// Regexp match generates 2 entries:
 		"POST " + url2:  1, // the matched call
 		"POST =~gitlab": 1, // the regexp responder
-	}
-
-	if !reflect.DeepEqual(info, expectedInfo) {
-		t.Fatalf("did not correctly track the call count info. expected it to be \n %+v\n but it was \n %+v", expectedInfo, info)
-	}
+	})
 
 	Reset()
 
-	afterResetTotalCallCount := GetTotalCallCount()
-	if afterResetTotalCallCount != 0 {
-		t.Fatalf("did not reset the total count of calls correctly. expected it to be 0 after reset, but it was %v", afterResetTotalCallCount)
-	}
-
-	info = GetCallCountInfo()
-	if !reflect.DeepEqual(info, map[string]int{}) {
-		t.Fatalf("did not correctly reset the call count info. expected it to be \n {}\n but it was \n %+v", info)
-	}
+	assert.Zero(GetTotalCallCount())
+	assert.Empty(GetCallCountInfo())
 }
 
 func TestMockTransportCallCountZero(t *testing.T) {
+	assert, require := td.AssertRequire(t)
+
 	Reset()
 	Activate()
 	defer Deactivate()
@@ -686,73 +582,48 @@ func TestMockTransportCallCountZero(t *testing.T) {
 	RegisterResponder("POST", "=~gitlab", NewStringResponder(200, "body"))
 
 	_, err := http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 
 	buff := new(bytes.Buffer)
 	json.NewEncoder(buff).Encode("{}") // nolint: errcheck
 	_, err = http.Post(url2, "application/json", buff)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 
 	_, err = http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 
-	totalCallCount := GetTotalCallCount()
-	if totalCallCount != 3 {
-		t.Fatalf("did not track the total count of calls correctly. expected it to be 3, but it was %v", totalCallCount)
-	}
-
-	info := GetCallCountInfo()
-	expectedInfo := map[string]int{
+	assert.Cmp(GetTotalCallCount(), 3)
+	assert.Cmp(GetCallCountInfo(), map[string]int{
 		"GET " + url: 2,
 		// Regexp match generates 2 entries:
 		"POST " + url2:  1, // the matched call
 		"POST =~gitlab": 1, // the regexp responder
-	}
-
-	if !reflect.DeepEqual(info, expectedInfo) {
-		t.Fatalf("did not correctly track the call count info. expected it to be \n %+v\n but it was \n %+v", expectedInfo, info)
-	}
+	})
 
 	ZeroCallCounters()
 
-	afterResetTotalCallCount := GetTotalCallCount()
-	if afterResetTotalCallCount != 0 {
-		t.Fatalf("did not reset the total count of calls correctly. expected it to be 0 after reset, but it was %v", afterResetTotalCallCount)
-	}
-
-	info = GetCallCountInfo()
-	expectedInfo = map[string]int{
+	assert.Zero(GetTotalCallCount())
+	assert.Cmp(GetCallCountInfo(), map[string]int{
 		"GET " + url: 0,
 		// Regexp match generates 2 entries:
 		"POST " + url2:  0, // the matched call
 		"POST =~gitlab": 0, // the regexp responder
-	}
-	if !reflect.DeepEqual(info, expectedInfo) {
-		t.Fatalf("did not correctly reset the call count info. expected it to be \n %+v\n but it was \n %+v", expectedInfo, info)
-	}
+	})
 
 	// Unregister each responder
 	RegisterResponder("GET", url, nil)
 	RegisterResponder("POST", "=~gitlab", nil)
 
-	info = GetCallCountInfo()
-	expectedInfo = map[string]int{
+	assert.Cmp(GetCallCountInfo(), map[string]int{
 		// this one remains as it is not directly related to a registered
 		// responder but a consequence of a regexp match
 		"POST " + url2: 0,
-	}
-	if !reflect.DeepEqual(info, expectedInfo) {
-		t.Fatalf("did not correctly reset the call count info. expected it to be \n %+v\n but it was \n %+v", expectedInfo, info)
-	}
+	})
 }
 
 func TestRegisterResponderWithQuery(t *testing.T) {
+	assert, require := td.AssertRequire(t)
+
 	Reset()
 
 	// Just in case a panic occurs
@@ -818,19 +689,15 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 			RegisterResponderWithQuery("GET", testURLPath, query, NewStringResponder(200, body))
 
 			for _, url := range test.URLs {
-				t.Logf("query=%v URL=%s", query, url)
+				assert.Logf("query=%v URL=%s", query, url)
 
 				req, err := http.NewRequest("GET", url, nil)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.CmpNoError(err)
 
 				resp, err := client.Do(req)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.CmpNoError(err)
 
-				assertBody(t, resp, body)
+				assertBody(assert, resp, body)
 			}
 
 			if info := GetCallCountInfo(); len(info) != 1 {
@@ -839,26 +706,16 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 
 			// Remove...
 			RegisterResponderWithQuery("GET", testURLPath, query, nil)
-			if info := GetCallCountInfo(); len(info) != 0 {
-				t.Fatalf("did not correctly reset the call count info, it still contains %+v", info)
-			}
+			require.Len(GetCallCountInfo(), 0)
 
 			for _, url := range test.URLs {
 				t.Logf("query=%v URL=%s", query, url)
 
 				req, err := http.NewRequest("GET", url, nil)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.CmpNoError(err)
 
 				_, err = client.Do(req)
-				if err == nil {
-					t.Fatalf("No error occurred for %s", url)
-				}
-
-				if !strings.HasSuffix(err.Error(), "no responder found") {
-					t.Errorf("Not expected error suffix: %s", err)
-				}
+				assert.HasSuffix(err, "no responder found")
 			}
 
 			DeactivateAndReset()
@@ -890,19 +747,10 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 			PanicPrefix: `path begins with "=~", RegisterResponder should be used instead of RegisterResponderWithQuery`,
 		},
 	} {
-		panicked, panicStr := catchPanic(func() {
-			RegisterResponderWithQuery("GET", test.Path, test.Query, resp)
-		})
-
-		if !panicked {
-			t.Errorf("RegisterResponderWithQuery + query=%v did not panic", test.Query)
-			continue
-		}
-
-		if !strings.HasPrefix(panicStr, test.PanicPrefix) {
-			t.Fatalf(`RegisterResponderWithQuery + query=%v panic="%v" expected prefix="%v"`,
-				test.Query, panicStr, test.PanicPrefix)
-		}
+		td.CmpPanic(t,
+			func() { RegisterResponderWithQuery("GET", test.Path, test.Query, resp) },
+			td.HasPrefix(test.PanicPrefix),
+			`RegisterResponderWithQuery + query=%v`, test.Query)
 	}
 }
 
@@ -917,130 +765,87 @@ func TestRegisterRegexpResponder(t *testing.T) {
 	RegisterRegexpResponder("GET", rx, NewStringResponder(200, "second"))
 
 	resp, err := http.Get(testURL)
-	if err != nil {
-		t.Fatalf("expected request %s to succeed", testURL)
-	}
+	td.Require(t).CmpNoError(err)
 
 	assertBody(t, resp, "second")
 }
 
 func TestSubmatches(t *testing.T) {
+	assert, require := td.AssertRequire(t)
+
 	req, err := http.NewRequest("GET", "/foo/bar", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 
 	req2 := internal.SetSubmatches(req, []string{"foo", "123", "-123", "12.3"})
 
-	t.Run("GetSubmatch", func(t *testing.T) {
+	assert.Run("GetSubmatch", func(assert *td.T) {
 		_, err := GetSubmatch(req, 1)
-		if err != ErrSubmatchNotFound {
-			t.Errorf("Submatch should not be found in req: %v", err)
-		}
+		assert.Cmp(err, ErrSubmatchNotFound)
 
 		_, err = GetSubmatch(req2, 5)
-		if err != ErrSubmatchNotFound {
-			t.Errorf("Submatch #5 should not be found in req2: %v", err)
-		}
+		assert.Cmp(err, ErrSubmatchNotFound)
 
 		s, err := GetSubmatch(req2, 1)
-		if err != nil {
-			t.Errorf("GetSubmatch(req2, 1) failed: %v", err)
-		}
-		if s != "foo" {
-			t.Errorf("GetSubmatch(req2, 1) failed, got: %v, expected: foo", s)
-		}
+		assert.CmpNoError(err)
+		assert.Cmp(s, "foo")
 
 		s, err = GetSubmatch(req2, 4)
-		if err != nil {
-			t.Errorf("GetSubmatch(req2, 4) failed: %v", err)
-		}
-		if s != "12.3" {
-			t.Errorf("GetSubmatch(req2, 4) failed, got: %v, expected: 12.3", s)
-		}
+		assert.CmpNoError(err)
+		assert.Cmp(s, "12.3")
 
 		s = MustGetSubmatch(req2, 4)
-		if s != "12.3" {
-			t.Errorf("GetSubmatch(req2, 4) failed, got: %v, expected: 12.3", s)
-		}
+		assert.Cmp(s, "12.3")
 	})
 
-	t.Run("GetSubmatchAsInt", func(t *testing.T) {
+	assert.Run("GetSubmatchAsInt", func(assert *td.T) {
 		_, err := GetSubmatchAsInt(req, 1)
-		if err != ErrSubmatchNotFound {
-			t.Errorf("Submatch should not be found in req: %v", err)
-		}
+		assert.Cmp(err, ErrSubmatchNotFound)
 
 		_, err = GetSubmatchAsInt(req2, 4) // not an int
-		if err == nil || err == ErrSubmatchNotFound {
-			t.Errorf("Submatch should not be an int64: %v", err)
-		}
+		assert.CmpError(err)
+		assert.Not(err, ErrSubmatchNotFound)
 
 		i, err := GetSubmatchAsInt(req2, 3)
-		if err != nil {
-			t.Errorf("GetSubmatchAsInt(req2, 3) failed: %v", err)
-		}
-		if i != -123 {
-			t.Errorf("GetSubmatchAsInt(req2, 3) failed, got: %d, expected: -123", i)
-		}
+		assert.CmpNoError(err)
+		assert.CmpLax(i, -123)
 
 		i = MustGetSubmatchAsInt(req2, 3)
-		if i != -123 {
-			t.Errorf("MustGetSubmatchAsInt(req2, 3) failed, got: %d, expected: -123", i)
-		}
+		assert.CmpLax(i, -123)
 	})
 
-	t.Run("GetSubmatchAsUint", func(t *testing.T) {
+	assert.Run("GetSubmatchAsUint", func(assert *td.T) {
 		_, err := GetSubmatchAsUint(req, 1)
-		if err != ErrSubmatchNotFound {
-			t.Errorf("Submatch should not be found in req: %v", err)
-		}
+		assert.Cmp(err, ErrSubmatchNotFound)
 
 		_, err = GetSubmatchAsUint(req2, 3) // not a uint
-		if err == nil || err == ErrSubmatchNotFound {
-			t.Errorf("Submatch should not be an uint64: %v", err)
-		}
+		assert.CmpError(err)
+		assert.Not(err, ErrSubmatchNotFound)
 
 		u, err := GetSubmatchAsUint(req2, 2)
-		if err != nil {
-			t.Errorf("GetSubmatchAsUint(req2, 2) failed: %v", err)
-		}
-		if u != 123 {
-			t.Errorf("GetSubmatchAsUint(req2, 2) failed, got: %d, expected: 123", u)
-		}
+		assert.CmpNoError(err)
+		assert.CmpLax(u, 123)
 
 		u = MustGetSubmatchAsUint(req2, 2)
-		if u != 123 {
-			t.Errorf("MustGetSubmatchAsUint(req2, 2) failed, got: %d, expected: 123", u)
-		}
+		assert.CmpLax(u, 123)
 	})
 
-	t.Run("GetSubmatchAsFloat", func(t *testing.T) {
+	assert.Run("GetSubmatchAsFloat", func(assert *td.T) {
 		_, err := GetSubmatchAsFloat(req, 1)
-		if err != ErrSubmatchNotFound {
-			t.Errorf("Submatch should not be found in req: %v", err)
-		}
+		assert.Cmp(err, ErrSubmatchNotFound)
 
 		_, err = GetSubmatchAsFloat(req2, 1) // not a float
-		if err == nil || err == ErrSubmatchNotFound {
-			t.Errorf("Submatch should not be an float64: %v", err)
-		}
+		assert.CmpError(err)
+		assert.Not(err, ErrSubmatchNotFound)
 
 		f, err := GetSubmatchAsFloat(req2, 4)
-		if err != nil {
-			t.Errorf("GetSubmatchAsFloat(req2, 4) failed: %v", err)
-		}
-		if f != 12.3 {
-			t.Errorf("GetSubmatchAsFloat(req2, 4) failed, got: %f, expected: 12.3", f)
-		}
+		assert.CmpNoError(err)
+		assert.Cmp(f, 12.3)
 
 		f = MustGetSubmatchAsFloat(req2, 4)
-		if f != 12.3 {
-			t.Errorf("MustGetSubmatchAsFloat(req2, 4) failed, got: %f, expected: 12.3", f)
-		}
+		assert.Cmp(f, 12.3)
 	})
 
-	t.Run("GetSubmatch* panics", func(t *testing.T) {
+	assert.Run("GetSubmatch* panics", func(assert *td.T) {
 		for _, test := range []struct {
 			Name        string
 			Fn          func()
@@ -1072,28 +877,11 @@ func TestSubmatches(t *testing.T) {
 				PanicPrefix: "GetSubmatchAsFloat failed: ",
 			},
 		} {
-			var (
-				didntPanic bool
-				panicVal   interface{}
-			)
-			func() {
-				defer func() { panicVal = recover() }()
-				test.Fn()
-				didntPanic = true
-			}()
-
-			if didntPanic {
-				t.Errorf("%s did not panic", test.Name)
-			}
-
-			panicStr, ok := panicVal.(string)
-			if !ok || !strings.HasPrefix(panicStr, test.PanicPrefix) {
-				t.Errorf(`%s panic="%v" expected prefix="%v"`, test.Name, panicVal, test.PanicPrefix)
-			}
+			assert.CmpPanic(test.Fn, td.HasPrefix(test.PanicPrefix), test.Name)
 		}
 	})
 
-	t.Run("Full test", func(t *testing.T) {
+	assert.RunAssertRequire("Full test", func(assert, require *td.T) {
 		Activate()
 		defer DeactivateAndReset()
 
@@ -1114,28 +902,20 @@ func TestSubmatches(t *testing.T) {
 			})
 
 		resp, err := http.Get("http://example.tld/id/123?delta=1.2&inc=-5")
-		if err != nil {
-			t.Fatal(err)
-		}
-		assertBody(t, resp, "OK")
+		require.CmpNoError(err)
+		assertBody(assert, resp, "OK")
 
 		// Check submatches
-		if id != 123 {
-			t.Errorf("seems MustGetSubmatchAsUint failed, got: %d, expected: 123", id)
-		}
-		if delta != 1.2 {
-			t.Errorf("seems MustGetSubmatchAsFloat failed, got: %f, expected: 1.2", delta)
-		}
-		if deltaStr != "1.2" {
-			t.Errorf("seems MustGetSubmatch failed, got: %v, expected: 1.2", deltaStr)
-		}
-		if inc != -5 {
-			t.Errorf("seems MustGetSubmatchAsInt failed, got: %d, expected: 123", inc)
-		}
+		assert.CmpLax(id, 123, "MustGetSubmatchAsUint")
+		assert.Cmp(delta, 1.2, "MustGetSubmatchAsFloat")
+		assert.Cmp(deltaStr, "1.2", "MustGetSubmatch")
+		assert.CmpLax(inc, -5, "MustGetSubmatchAsInt")
 	})
 }
 
 func TestCheckStackTracer(t *testing.T) {
+	assert, require := td.AssertRequire(t)
+
 	// Full test using Trace() Responder
 	Activate()
 	defer Deactivate()
@@ -1147,78 +927,41 @@ func TestCheckStackTracer(t *testing.T) {
 			Trace(func(args ...interface{}) { mesg = args[0].(string) }))
 
 	resp, err := http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.CmpNoError(err)
 
-	if !assertBody(t, resp, "{}") {
-		t.FailNow()
-	}
+	assertBody(assert, resp, "{}")
 
 	// Check that first frame is the net/http.Get() call
-	if !strings.HasPrefix(mesg, "GET https://foo.bar/\nCalled from net/http.Get()\n    at ") ||
-		strings.HasSuffix(mesg, "\n") {
-		t.Errorf("Bad mesg: <%v>", mesg)
-	}
+	assert.HasPrefix(mesg, "GET https://foo.bar/\nCalled from net/http.Get()\n    at ")
+	assert.Not(mesg, td.HasSuffix("\n"))
 }
 
 func TestCheckMethod(t *testing.T) {
 	mt := NewMockTransport()
 
-	var (
-		panicked bool
-		panicStr string
-	)
+	const expected = `You probably want to use method "GET" instead of "get"? If not and so want to disable this check, set MockTransport.DontCheckMethod field to true`
 
-	//
-	// Panics
-	checkPanic := func() {
-		helper(t).Helper()
-		if panicStr != `You probably want to use method "GET" instead of "get"? If not and so want to disable this check, set MockTransport.DontCheckMethod field to true` {
-			if panicked {
-				t.Errorf("Wrong panic mesg: %s", panicStr)
-			} else {
-				t.Error("Did not panic!")
-			}
-		}
-	}
+	td.CmpPanic(t,
+		func() { mt.RegisterResponder("get", "/pipo", NewStringResponder(200, "")) },
+		expected)
 
-	panicked, panicStr = catchPanic(func() {
-		mt.RegisterResponder("get", "/pipo", NewStringResponder(200, ""))
-	})
-	checkPanic()
+	td.CmpPanic(t,
+		func() { mt.RegisterRegexpResponder("get", regexp.MustCompile("."), NewStringResponder(200, "")) },
+		expected)
 
-	panicked, panicStr = catchPanic(func() {
-		mt.RegisterRegexpResponder("get", regexp.MustCompile("."), NewStringResponder(200, ""))
-	})
-	checkPanic()
-
-	panicked, panicStr = catchPanic(func() {
-		mt.RegisterResponderWithQuery("get", "/pipo", url.Values(nil), NewStringResponder(200, ""))
-	})
-	checkPanic()
+	td.CmpPanic(t,
+		func() { mt.RegisterResponderWithQuery("get", "/pipo", url.Values(nil), NewStringResponder(200, "")) },
+		expected)
 
 	//
 	// No longer panics
-	checkNoPanic := func() {
-		helper(t).Helper()
-		if panicked {
-			t.Errorf("Should not panic! but %s", panicStr)
-		}
-	}
 	mt.DontCheckMethod = true
-	panicked, panicStr = catchPanic(func() {
-		mt.RegisterResponder("get", "/pipo", NewStringResponder(200, ""))
-	})
-	checkNoPanic()
+	td.CmpNotPanic(t,
+		func() { mt.RegisterResponder("get", "/pipo", NewStringResponder(200, "")) })
 
-	panicked, panicStr = catchPanic(func() {
-		mt.RegisterRegexpResponder("get", regexp.MustCompile("."), NewStringResponder(200, ""))
-	})
-	checkNoPanic()
+	td.CmpNotPanic(t,
+		func() { mt.RegisterRegexpResponder("get", regexp.MustCompile("."), NewStringResponder(200, "")) })
 
-	panicked, panicStr = catchPanic(func() {
-		mt.RegisterResponderWithQuery("get", "/pipo", url.Values(nil), NewStringResponder(200, ""))
-	})
-	checkNoPanic()
+	td.CmpNotPanic(t,
+		func() { mt.RegisterResponderWithQuery("get", "/pipo", url.Values(nil), NewStringResponder(200, "")) })
 }

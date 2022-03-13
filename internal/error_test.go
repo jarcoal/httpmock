@@ -3,6 +3,8 @@ package internal_test
 import (
 	"testing"
 
+	"github.com/maxatome/go-testdeep/td"
+
 	"github.com/jarcoal/httpmock/internal"
 )
 
@@ -13,12 +15,7 @@ func TestErrorNoResponderFoundMistake(t *testing.T) {
 		Suggested: "BINGO",
 	}
 
-	if e.Error() != `no responder found for method "pipo", but one matches method "BINGO"` {
-		t.Errorf("not expected error message: %s", e)
-	}
+	td.Cmp(t, e.Error(), `no responder found for method "pipo", but one matches method "BINGO"`)
 
-	werr := e.Unwrap()
-	if werr != internal.NoResponderFound {
-		t.Errorf("NoResponderFound is not wrapped, but %[1]s (%[1]T)", werr)
-	}
+	td.Cmp(t, e.Unwrap(), internal.NoResponderFound)
 }
