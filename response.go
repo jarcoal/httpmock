@@ -37,7 +37,7 @@ var suggestedKey = suggestedKeyType{}
 // a mocked response.
 type Responder func(*http.Request) (*http.Response, error)
 
-func (r Responder) times(name string, n int, fn ...func(...interface{})) Responder {
+func (r Responder) times(name string, n int, fn ...func(...any)) Responder {
 	count := 0
 	return func(req *http.Request) (*http.Response, error) {
 		count++
@@ -71,7 +71,7 @@ func (r Responder) times(name string, n int, fn ...func(...interface{})) Respond
 //     httpmock.RegisterResponder("GET", "/foo/bar",
 //       httpmock.NewStringResponder(200, "{}").Times(3, t.Log),
 //     )
-func (r Responder) Times(n int, fn ...func(...interface{})) Responder {
+func (r Responder) Times(n int, fn ...func(...any)) Responder {
 	return r.times("Times", n, fn...)
 }
 
@@ -92,7 +92,7 @@ func (r Responder) Times(n int, fn ...func(...interface{})) Responder {
 //     httpmock.RegisterResponder("GET", "/foo/bar",
 //       httpmock.NewStringResponder(200, "{}").Once(t.Log),
 //     )
-func (r Responder) Once(fn ...func(...interface{})) Responder {
+func (r Responder) Once(fn ...func(...any)) Responder {
 	return r.times("Once", 1, fn...)
 }
 
@@ -110,7 +110,7 @@ func (r Responder) Once(fn ...func(...interface{})) Responder {
 //     httpmock.RegisterResponder("GET", "/foo/bar",
 //       httpmock.NewStringResponder(200, "{}").Trace(t.Log),
 //     )
-func (r Responder) Trace(fn func(...interface{})) Responder {
+func (r Responder) Trace(fn func(...any)) Responder {
 	return func(req *http.Request) (*http.Response, error) {
 		resp, err := r(req)
 		return resp, internal.StackTracer{
@@ -272,7 +272,7 @@ func ResponderFromResponse(resp *http.Response) Responder {
 //         t.Log),
 //     )
 //   }
-func ResponderFromMultipleResponses(responses []*http.Response, fn ...func(...interface{})) Responder {
+func ResponderFromMultipleResponses(responses []*http.Response, fn ...func(...any)) Responder {
 	responseIndex := 0
 	mutex := sync.Mutex{}
 	return func(req *http.Request) (*http.Response, error) {
@@ -339,7 +339,7 @@ func NewErrorResponder(err error) Responder {
 //         at /go/src/testing/testing.go:865
 //       testing.tRunner()
 //         at /go/src/runtime/asm_amd64.s:1337
-func NewNotFoundResponder(fn func(...interface{})) Responder {
+func NewNotFoundResponder(fn func(...any)) Responder {
 	return func(req *http.Request) (*http.Response, error) {
 		var extra string
 		suggested, _ := req.Context().Value(suggestedKey).(*suggestedInfo)
@@ -401,12 +401,12 @@ func NewBytesResponder(status int, body []byte) Responder {
 }
 
 // NewJsonResponse creates an *http.Response with a body that is a
-// json encoded representation of the given interface{}.  Also accepts
+// json encoded representation of the given any.  Also accepts
 // an http status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewJsonResponse(200, httpmock.File("body.json"))
-func NewJsonResponse(status int, body interface{}) (*http.Response, error) { // nolint: revive
+func NewJsonResponse(status int, body any) (*http.Response, error) { // nolint: revive
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -417,11 +417,11 @@ func NewJsonResponse(status int, body interface{}) (*http.Response, error) { // 
 }
 
 // NewJsonResponder creates a Responder from a given body (as an
-// interface{} that is encoded to json) and status code.
+// any that is encoded to json) and status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewJsonResponder(200, httpmock.File("body.json"))
-func NewJsonResponder(status int, body interface{}) (Responder, error) { // nolint: revive
+func NewJsonResponder(status int, body any) (Responder, error) { // nolint: revive
 	resp, err := NewJsonResponse(status, body)
 	if err != nil {
 		return nil, err
@@ -442,7 +442,7 @@ func NewJsonResponder(status int, body interface{}) (Responder, error) { // noli
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewJsonResponderOrPanic(200, httpmock.File("body.json"))
-func NewJsonResponderOrPanic(status int, body interface{}) Responder { // nolint: revive
+func NewJsonResponderOrPanic(status int, body any) Responder { // nolint: revive
 	responder, err := NewJsonResponder(status, body)
 	if err != nil {
 		panic(err)
@@ -451,12 +451,12 @@ func NewJsonResponderOrPanic(status int, body interface{}) Responder { // nolint
 }
 
 // NewXmlResponse creates an *http.Response with a body that is an xml
-// encoded representation of the given interface{}.  Also accepts an
+// encoded representation of the given any.  Also accepts an
 // http status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewXmlResponse(200, httpmock.File("body.xml"))
-func NewXmlResponse(status int, body interface{}) (*http.Response, error) { // nolint: revive
+func NewXmlResponse(status int, body any) (*http.Response, error) { // nolint: revive
 	var (
 		encoded []byte
 		err     error
@@ -475,11 +475,11 @@ func NewXmlResponse(status int, body interface{}) (*http.Response, error) { // n
 }
 
 // NewXmlResponder creates a Responder from a given body (as an
-// interface{} that is encoded to xml) and status code.
+// any that is encoded to xml) and status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewXmlResponder(200, httpmock.File("body.xml"))
-func NewXmlResponder(status int, body interface{}) (Responder, error) { // nolint: revive
+func NewXmlResponder(status int, body any) (Responder, error) { // nolint: revive
 	resp, err := NewXmlResponse(status, body)
 	if err != nil {
 		return nil, err
@@ -500,7 +500,7 @@ func NewXmlResponder(status int, body interface{}) (Responder, error) { // nolin
 //
 // To pass the content of an existing file as body use httpmock.File as in:
 //   httpmock.NewXmlResponderOrPanic(200, httpmock.File("body.xml"))
-func NewXmlResponderOrPanic(status int, body interface{}) Responder { // nolint: revive
+func NewXmlResponderOrPanic(status int, body any) Responder { // nolint: revive
 	responder, err := NewXmlResponder(status, body)
 	if err != nil {
 		panic(err)
@@ -527,7 +527,7 @@ func NewRespBodyFromBytes(body []byte) io.ReadCloser {
 }
 
 type dummyReadCloser struct {
-	orig interface{}   // string or []byte
+	orig any           // string or []byte
 	body io.ReadSeeker // instanciated on demand from orig
 }
 

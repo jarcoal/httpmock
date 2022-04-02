@@ -32,7 +32,7 @@ Advanced Example:
     defer httpmock.DeactivateAndReset()
 
     // our database of articles
-    articles := make([]map[string]interface{}, 0)
+    articles := make([]map[string]any, 0)
 
     // mock to list out the articles
     httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles",
@@ -50,7 +50,7 @@ Advanced Example:
       func(req *http.Request) (*http.Response, error) {
         // Get ID from request
         id := httpmock.MustGetSubmatchAsUint(req, 1) // 1=first regexp submatch
-        return httpmock.NewJsonResponse(200, map[string]interface{}{
+        return httpmock.NewJsonResponse(200, map[string]any{
           "id":   id,
           "name": "My Great Article",
         })
@@ -60,7 +60,7 @@ Advanced Example:
     // mock to add a new article
     httpmock.RegisterResponder("POST", "https://api.mybiz.com/articles",
       func(req *http.Request) (*http.Response, error) {
-        article := make(map[string]interface{})
+        article := make(map[string]any)
         if err := json.NewDecoder(req.Body).Decode(&article); err != nil {
           return httpmock.NewStringResponse(400, ""), nil
         }

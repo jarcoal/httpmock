@@ -605,7 +605,7 @@ func (m *MockTransport) RegisterRegexpResponder(method string, urlRegexp *regexp
 // OPTIONS, POST, PUT or TRACE, a panics occurs to notice the possible
 // mistake. This panic can be disabled by setting m.DontCheckMethod to
 // true prior to this call.
-func (m *MockTransport) RegisterResponderWithQuery(method, path string, query interface{}, responder Responder) {
+func (m *MockTransport) RegisterResponderWithQuery(method, path string, query any, responder Responder) {
 	if isRegexpURL(path) {
 		panic(`path begins with "=~", RegisterResponder should be used instead of RegisterResponderWithQuery`)
 	}
@@ -1074,7 +1074,7 @@ func RegisterRegexpResponder(method string, urlRegexp *regexp.Regexp, responder 
 // OPTIONS, POST, PUT or TRACE, a panics occurs to notice the possible
 // mistake. This panic can be disabled by setting
 // DefaultTransport.DontCheckMethod to true prior to this call.
-func RegisterResponderWithQuery(method, path string, query interface{}, responder Responder) {
+func RegisterResponderWithQuery(method, path string, query any, responder Responder) {
 	DefaultTransport.RegisterResponderWithQuery(method, path, query, responder)
 }
 
@@ -1109,7 +1109,7 @@ var ErrSubmatchNotFound = errors.New("submatch not found")
 //       if err != nil {
 //         return nil, err
 //       }
-//       return NewJsonResponse(200, map[string]interface{}{
+//       return NewJsonResponse(200, map[string]any{
 //         "id":   123,
 //         "name": name,
 //       })
@@ -1140,7 +1140,7 @@ func GetSubmatch(req *http.Request, n int) (string, error) {
 //       if err != nil {
 //         return nil, err
 //       }
-//       return NewJsonResponse(200, map[string]interface{}{
+//       return NewJsonResponse(200, map[string]any{
 //         "id":   id,
 //         "name": "The beautiful name",
 //       })
@@ -1166,7 +1166,7 @@ func GetSubmatchAsInt(req *http.Request, n int) (int64, error) {
 //       if err != nil {
 //         return nil, err
 //       }
-//       return NewJsonResponse(200, map[string]interface{}{
+//       return NewJsonResponse(200, map[string]any{
 //         "id":   id,
 //         "name": "The beautiful name",
 //       })
@@ -1192,7 +1192,7 @@ func GetSubmatchAsUint(req *http.Request, n int) (uint64, error) {
 //       if err != nil {
 //         return nil, err
 //       }
-//       return NewJsonResponse(200, map[string]interface{}{
+//       return NewJsonResponse(200, map[string]any{
 //         "id":     id,
 //         "name":   "The beautiful name",
 //         "height": height,
@@ -1217,7 +1217,7 @@ func GetSubmatchAsFloat(req *http.Request, n int) (float64, error) {
 //   RegisterResponder("GET", `=~^/item/name/([^/]+)\z`,
 //     func(req *http.Request) (*http.Response, error) {
 //       name := MustGetSubmatch(req, 1) // 1=first regexp submatch
-//       return NewJsonResponse(200, map[string]interface{}{
+//       return NewJsonResponse(200, map[string]any{
 //         "id":   123,
 //         "name": name,
 //       })
@@ -1241,7 +1241,7 @@ func MustGetSubmatch(req *http.Request, n int) string {
 //   RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
 //     func(req *http.Request) (*http.Response, error) {
 //       id := MustGetSubmatchAsInt(req, 1) // 1=first regexp submatch
-//       return NewJsonResponse(200, map[string]interface{}{
+//       return NewJsonResponse(200, map[string]any{
 //         "id":   id,
 //         "name": "The beautiful name",
 //       })
@@ -1265,7 +1265,7 @@ func MustGetSubmatchAsInt(req *http.Request, n int) int64 {
 //   RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
 //     func(req *http.Request) (*http.Response, error) {
 //       id, err := MustGetSubmatchAsUint(req, 1) // 1=first regexp submatch
-//       return NewJsonResponse(200, map[string]interface{}{
+//       return NewJsonResponse(200, map[string]any{
 //         "id":   id,
 //         "name": "The beautiful name",
 //       })
@@ -1289,7 +1289,7 @@ func MustGetSubmatchAsUint(req *http.Request, n int) uint64 {
 //   RegisterResponder("PATCH", `=~^/item/id/\d+\?height=(\d+(?:\.\d*)?)\z`,
 //     func(req *http.Request) (*http.Response, error) {
 //       height := MustGetSubmatchAsFloat(req, 1) // 1=first regexp submatch
-//       return NewJsonResponse(200, map[string]interface{}{
+//       return NewJsonResponse(200, map[string]any{
 //         "id":     id,
 //         "name":   "The beautiful name",
 //         "height": height,
