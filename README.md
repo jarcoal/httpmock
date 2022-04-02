@@ -161,7 +161,51 @@ If no standard responder matched, the regexp responders are checked,
 in the same order, the first match stops the search.
 
 
-### [Ginkgo](https://onsi.github.io/ginkgo/) Example:
+### [go-testdeep](https://go-testdeep.zetta.rocks/) + [tdsuite](https://pkg.go.dev/github.com/maxatome/go-testdeep/helpers/tdsuite) example:
+```go
+// article_test.go
+
+import (
+  "testing"
+
+  "github.com/jarcoal/httpmock"
+  "github.com/maxatome/go-testdeep/helpers/tdsuite"
+  "github.com/maxatome/go-testdeep/td"
+)
+
+type MySuite struct{}
+
+func (s *MySuite) Setup(t *td.T) error {
+  // block all HTTP requests
+  httpmock.Activate()
+  return nil
+}
+
+func (s *MySuite) PostTest(t *td.T, testName string) error {
+  // remove any mocks after each test
+  httpmock.Reset()
+  return nil
+}
+
+func (s *MySuite) Destroy(t *td.T) error {
+  httpmock.DeactivateAndReset()
+  return nil
+}
+
+func TestMySuite(t *testing.T) {
+  tdsuite.Run(t, &MySuite{})
+}
+
+func (s *MySuite) TestArticles(assert, require *td.T) {
+  httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles.json",
+    httpmock.NewStringResponder(200, `[{"id": 1, "name": "My Great Article"}]`))
+
+  // do stuff that makes a request to articles.json
+}
+```
+
+
+### [Ginkgo](https://onsi.github.io/ginkgo/) example:
 ```go
 // article_suite_test.go
 
