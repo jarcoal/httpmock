@@ -777,6 +777,9 @@ var InitialTransport = http.DefaultTransport
 // than http.DefaultClient).
 var oldClients = map[*http.Client]http.RoundTripper{}
 
+// oldClientsLock protects oldClients from concurrent writes.
+var oldClientsLock sync.Mutex
+
 // Activate starts the mock environment.  This should be called before
 // your tests run.  Under the hood this replaces the Transport on the
 // http.DefaultClient with httpmock.DefaultTransport.
@@ -826,6 +829,8 @@ func ActivateNonDefault(client *http.Client) {
 	}
 
 	// save the custom client & it's RoundTripper
+	oldClientsLock.Lock()
+	defer oldClientsLock.Unlock()
 	if _, ok := oldClients[client]; !ok {
 		oldClients[client] = client.Transport
 	}
@@ -887,6 +892,8 @@ func Deactivate() {
 	http.DefaultTransport = InitialTransport
 
 	// reset the custom clients to use their original RoundTripper
+	oldClientsLock.Lock()
+	defer oldClientsLock.Unlock()
 	for oldClient, oldTransport := range oldClients {
 		oldClient.Transport = oldTransport
 		delete(oldClients, oldClient)
