@@ -39,13 +39,14 @@ func methodProbablyWrong(method string) bool {
 }
 
 // ConnectionFailure is a responder that returns a connection failure.
-// This is the default responder, and is called when no other matching
-// responder is found.
+// This is the default responder and is called when no other matching
+// responder is found. See [RegisterNoResponder] to override this
+// default behavior.
 func ConnectionFailure(*http.Request) (*http.Response, error) {
 	return nil, NoResponderFound
 }
 
-// NewMockTransport creates a new *MockTransport with no responders.
+// NewMockTransport creates a new [*MockTransport] with no responders.
 func NewMockTransport() *MockTransport {
 	return &MockTransport{
 		responders:    make(map[internal.RouteKey]Responder),
@@ -60,10 +61,10 @@ type regexpResponder struct {
 	responder Responder
 }
 
-// MockTransport implements http.RoundTripper, which fulfills single
-// http requests issued by an http.Client.  This implementation
-// doesn't actually make the call, instead deferring to the registered
-// list of responders.
+// MockTransport implements [http.RoundTripper] interface, which
+// fulfills single HTTP requests issued by an [http.Client].  This
+// implementation doesn't actually make the call, instead deferring to
+// the registered list of responders.
 type MockTransport struct {
 	// DontCheckMethod disables standard methods check. By default, if
 	// a responder is registered using a lower-cased method among CONNECT,
@@ -170,9 +171,9 @@ func (m *MockTransport) findResponder(method string, url *url.URL) (
 }
 
 // RoundTrip receives HTTP requests and routes them to the appropriate
-// responder.  It is required to implement the http.RoundTripper
+// responder.  It is required to implement the [http.RoundTripper]
 // interface.  You will not interact with this directly, instead the
-// *http.Client you are using will call it for you.
+// [*http.Client] you are using will call it for you.
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	method := req.Method
 	if method == "" {
@@ -274,8 +275,8 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // NumResponders returns the number of responders currently in use.
-// The responder registered with RegisterNoResponder() is not taken
-// into account.
+// The responder registered with [MockTransport.RegisterNoResponder]
+// is not taken into account.
 func (m *MockTransport) NumResponders() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -287,7 +288,9 @@ func (m *MockTransport) NumResponders() int {
 // Non-regexp responders are listed first in alphabetical order
 // (sorted by URL then METHOD), then regexp responders in the order
 // they have been registered.
-// The responder registered with RegisterNoResponder() is not listed.
+//
+// The responder registered with [MockTransport.RegisterNoResponder]
+// is not listed.
 func (m *MockTransport) Responders() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -443,19 +446,22 @@ func (m *MockTransport) checkMethod(method string) {
 // If url begins with "=~", the following chars are considered as a
 // regular expression. If this regexp can not be compiled, it panics.
 // Note that the "=~" prefix remains in statistics returned by
-// GetCallCountInfo(). As 2 regexps can match the same URL, the regexp
-// responders are tested in the order they are registered. Registering
-// an already existing regexp responder (same method & same regexp
-// string) replaces its responder, but does not change its position.
+// [MockTransport.GetCallCountInfo]. As 2 regexps can match the same
+// URL, the regexp responders are tested in the order they are
+// registered. Registering an already existing regexp responder (same
+// method & same regexp string) replaces its responder, but does not
+// change its position.
 //
 // Registering an already existing responder resets the corresponding
-// statistics as returned by GetCallCountInfo().
+// statistics as returned by [MockTransport.GetCallCountInfo].
 //
-// Registering a nil Responder removes the existing one and the
-// corresponding statistics as returned by GetCallCountInfo(). It does
-// nothing if it does not already exist.
+// Registering a nil [Responder] removes the existing one and the
+// corresponding statistics as returned by
+// [MockTransport.GetCallCountInfo]. It does nothing if it does not
+// already exist.
 //
-// See RegisterRegexpResponder() to directly pass a *regexp.Regexp.
+// See [MockTransport.RegisterRegexpResponder] to directly pass a
+// [*regexp.Regexp].
 //
 // Example:
 //
@@ -555,17 +561,19 @@ found:
 // tested in the order they are registered. Registering an already
 // existing regexp responder (same method & same regexp string)
 // replaces its responder, but does not change its position, and
-// resets the corresponding statistics as returned by GetCallCountInfo().
+// resets the corresponding statistics as returned by
+// [MockTransport.GetCallCountInfo].
 //
-// Registering a nil Responder removes the existing one and the
-// corresponding statistics as returned by GetCallCountInfo(). It does
-// nothing if it does not already exist.
+// Registering a nil [Responder] removes the existing one and the
+// corresponding statistics as returned by
+// [MockTransport.MockTransportGetCallCountInfo]. It does nothing if
+// it does not already exist.
 //
 // A "=~" prefix is added to the stringified regexp in the statistics
-// returned by GetCallCountInfo().
+// returned by [MockTransport.GetCallCountInfo].
 //
-// See RegisterResponder function and the "=~" prefix in its url
-// parameter to avoid compiling the regexp by yourself.
+// See [MockTransport.RegisterResponder] function and the "=~" prefix
+// in its url parameter to avoid compiling the regexp by yourself.
 //
 // If method is a lower-cased version of CONNECT, DELETE, GET, HEAD,
 // OPTIONS, POST, PUT or TRACE, a panics occurs to notice the possible
@@ -582,27 +590,29 @@ func (m *MockTransport) RegisterRegexpResponder(method string, urlRegexp *regexp
 	})
 }
 
-// RegisterResponderWithQuery is same as RegisterResponder, but it
-// doesn't depend on query items order.
+// RegisterResponderWithQuery is same as
+// [MockTransport.RegisterResponder], but it doesn't depend on query
+// items order.
 //
 // If query is non-nil, its type can be:
 //
-//	url.Values
-//	map[string]string
-//	string, a query string like "a=12&a=13&b=z&c" (see net/url.ParseQuery function)
+//   - [url.Values]
+//   - map[string]string
+//   - string, a query string like "a=12&a=13&b=z&c" (see [url.ParseQuery] function)
 //
 // If the query type is not recognized or the string cannot be parsed
-// using net/url.ParseQuery, a panic() occurs.
+// using [url.ParseQuery], a panic() occurs.
 //
-// Unlike RegisterResponder, path cannot be prefixed by "=~" to say it
-// is a regexp. If it is, a panic occurs.
+// Unlike [MockTransport.RegisterResponder], path cannot be prefixed
+// by "=~" to say it is a regexp. If it is, a panic occurs.
 //
 // Registering an already existing responder resets the corresponding
-// statistics as returned by GetCallCountInfo().
+// statistics as returned by [MockTransport.GetCallCountInfo].
 //
-// Registering a nil Responder removes the existing one and the
-// corresponding statistics as returned by GetCallCountInfo(). It does
-// nothing if it does not already exist.
+// Registering a nil [Responder] removes the existing one and the
+// corresponding statistics as returned by
+// [MockTransport.GetCallCountInfo]. It does nothing if it does not
+// already exist.
 //
 // If method is a lower-cased version of CONNECT, DELETE, GET, HEAD,
 // OPTIONS, POST, PUT or TRACE, a panics occurs to notice the possible
@@ -678,24 +688,19 @@ func sortedQuery(m url.Values) string {
 }
 
 // RegisterNoResponder is used to register a responder that is called
-// if no other responder is found.  The default is httpmock.ConnectionFailure
-// that returns an error able to indicate a possible method mismatch.
+// if no other responders are found.  The default is [ConnectionFailure]
+// that returns a connection error.
 //
-// Use it in conjunction with NewNotFoundResponder to ensure that all
+// Use it in conjunction with [NewNotFoundResponder] to ensure that all
 // routes have been mocked:
 //
-//	import (
-//	  "testing"
-//	  "github.com/jarcoal/httpmock"
-//	)
-//	...
 //	func TestMyApp(t *testing.T) {
 //	   ...
 //	   // Calls testing.Fatal with the name of Responder-less route and
 //	   // the stack trace of the call.
-//	   httpmock.RegisterNoResponder(httpmock.NewNotFoundResponder(t.Fatal))
+//	   mock.RegisterNoResponder(httpmock.NewNotFoundResponder(t.Fatal))
 //
-// Will abort the current test and print something like:
+// will abort the current test and print something like:
 //
 //	transport_test.go:735: Called from net/http.Get()
 //	      at /go/src/github.com/jarcoal/httpmock/transport_test.go:714
@@ -705,7 +710,17 @@ func sortedQuery(m url.Values) string {
 //	      at /go/src/runtime/asm_amd64.s:1337
 //
 // If responder is passed as nil, the default behavior
-// (httpmock.ConnectionFailure) is re-enabled.
+// ([ConnectionFailure]) is re-enabled.
+//
+// In some cases you may not want all URLs to be mocked, in which case
+// you can do this:
+//
+//	func TestFetchArticles(t *testing.T) {
+//	  ...
+//	  mock.RegisterNoResponder(httpmock.InitialTransport.RoundTrip)
+//
+//	  // any requests that don't have a registered URL will be fetched normally
+//	}
 func (m *MockTransport) RegisterNoResponder(responder Responder) {
 	m.mu.Lock()
 	m.noResponder = responder
@@ -713,7 +728,7 @@ func (m *MockTransport) RegisterNoResponder(responder Responder) {
 }
 
 // Reset removes all registered responders (including the no
-// responder) from the MockTransport. It zeroes call counters too.
+// responder) from the [MockTransport]. It zeroes call counters too.
 func (m *MockTransport) Reset() {
 	m.mu.Lock()
 	m.responders = make(map[internal.RouteKey]Responder)
@@ -734,10 +749,10 @@ func (m *MockTransport) ZeroCallCounters() {
 	m.mu.Unlock()
 }
 
-// GetCallCountInfo gets the info on all the calls httpmock has caught
+// GetCallCountInfo gets the info on all the calls m has caught
 // since it was activated or reset. The info is returned as a map of
 // the calling keys with the number of calls made to them as their
-// value. The key is the method, a space, and the url all concatenated
+// value. The key is the method, a space, and the URL all concatenated
 // together.
 //
 // As a special case, regexp responders generate 2 entries for each
@@ -763,20 +778,22 @@ func (m *MockTransport) GetCallCountInfo() map[string]int {
 	return res
 }
 
-// GetTotalCallCount returns the totalCallCount.
+// GetTotalCallCount gets the total number of calls m has taken
+// since it was activated or reset.
 func (m *MockTransport) GetTotalCallCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.totalCallCount
 }
 
-// DefaultTransport is the default mock transport used by Activate,
-// Deactivate, Reset, DeactivateAndReset, RegisterResponder, and
-// RegisterNoResponder.
+// DefaultTransport is the default mock transport used by [Activate],
+// [Deactivate], [Reset], [DeactivateAndReset], [RegisterResponder],
+// [RegisterRegexpResponder], [RegisterResponderWithQuery] and
+// [RegisterNoResponder].
 var DefaultTransport = NewMockTransport()
 
 // InitialTransport is a cache of the original transport used so we
-// can put it back when Deactivate is called.
+// can put it back when [Deactivate] is called.
 var InitialTransport = http.DefaultTransport
 
 // oldClients is used to handle custom http clients (i.e clients other
@@ -787,8 +804,8 @@ var oldClients = map[*http.Client]http.RoundTripper{}
 var oldClientsLock sync.Mutex
 
 // Activate starts the mock environment.  This should be called before
-// your tests run.  Under the hood this replaces the Transport on the
-// http.DefaultClient with httpmock.DefaultTransport.
+// your tests run.  Under the hood this replaces the [http.Client.Transport]
+// field of [http.DefaultClient] with [DefaultTransport].
 //
 // To enable mocks for a test, simply activate at the beginning of a test:
 //
@@ -798,7 +815,7 @@ var oldClientsLock sync.Mutex
 //	}
 //
 // If you want all of your tests in a package to be mocked, just call
-// Activate from init():
+// [Activate] from init():
 //
 //	func init() {
 //	  httpmock.Activate()
@@ -825,8 +842,8 @@ func Activate() {
 }
 
 // ActivateNonDefault starts the mock environment with a non-default
-// http.Client.  This emulates the Activate function, but allows for
-// custom clients that do not use http.DefaultTransport
+// [*http.Client].  This emulates the [Activate] function, but allows for
+// custom clients that do not use [http.DefaultTransport].
 //
 // To enable mocks for a test using a custom client, activate at the
 // beginning of a test:
@@ -850,7 +867,7 @@ func ActivateNonDefault(client *http.Client) {
 // GetCallCountInfo gets the info on all the calls httpmock has caught
 // since it was activated or reset. The info is returned as a map of
 // the calling keys with the number of calls made to them as their
-// value. The key is the method, a space, and the url all concatenated
+// value. The key is the method, a space, and the URL all concatenated
 // together.
 //
 // As a special case, regexp responders generate 2 entries for each
@@ -889,7 +906,7 @@ func GetTotalCallCount() int {
 //	  // when this test ends, the mock environment will close
 //	}
 //
-// Since go 1.14 you can also use (*testing.T).Cleanup() method as in:
+// Since go 1.14 you can also use [*testing.T.Cleanup] method as in:
 //
 //	func TestFetchArticles(t *testing.T) {
 //	  httpmock.Activate()
@@ -926,7 +943,7 @@ func ZeroCallCounters() {
 }
 
 // DeactivateAndReset is just a convenience method for calling
-// Deactivate() and then Reset().
+// [Deactivate] and then [Reset].
 //
 // Happy deferring!
 func DeactivateAndReset() {
@@ -951,19 +968,19 @@ func DeactivateAndReset() {
 // If url begins with "=~", the following chars are considered as a
 // regular expression. If this regexp can not be compiled, it panics.
 // Note that the "=~" prefix remains in statistics returned by
-// GetCallCountInfo(). As 2 regexps can match the same URL, the regexp
+// [GetCallCountInfo]. As 2 regexps can match the same URL, the regexp
 // responders are tested in the order they are registered. Registering
 // an already existing regexp responder (same method & same regexp
 // string) replaces its responder, but does not change its position.
 //
 // Registering an already existing responder resets the corresponding
-// statistics as returned by GetCallCountInfo().
+// statistics as returned by [GetCallCountInfo].
 //
-// Registering a nil Responder removes the existing one and the
-// corresponding statistics as returned by GetCallCountInfo(). It does
+// Registering a nil [Responder] removes the existing one and the
+// corresponding statistics as returned by [GetCallCountInfo]. It does
 // nothing if it does not already exist.
 //
-// See RegisterRegexpResponder() to directly pass a *regexp.Regexp.
+// See [RegisterRegexpResponder] to directly pass a *regexp.Regexp.
 //
 // Example:
 //
@@ -988,7 +1005,7 @@ func DeactivateAndReset() {
 // If method is a lower-cased version of CONNECT, DELETE, GET, HEAD,
 // OPTIONS, POST, PUT or TRACE, a panics occurs to notice the possible
 // mistake. This panic can be disabled by setting
-// DefaultTransport.DontCheckMethod to true prior to this call.
+// [DefaultTransport].DontCheckMethod to true prior to this call.
 func RegisterResponder(method, url string, responder Responder) {
 	DefaultTransport.RegisterResponder(method, url, responder)
 }
@@ -1003,16 +1020,16 @@ func RegisterResponder(method, url string, responder Responder) {
 // tested in the order they are registered. Registering an already
 // existing regexp responder (same method & same regexp string)
 // replaces its responder, but does not change its position, and
-// resets the corresponding statistics as returned by GetCallCountInfo().
+// resets the corresponding statistics as returned by [GetCallCountInfo].
 //
-// Registering a nil Responder removes the existing one and the
-// corresponding statistics as returned by GetCallCountInfo(). It does
+// Registering a nil [Responder] removes the existing one and the
+// corresponding statistics as returned by [GetCallCountInfo]. It does
 // nothing if it does not already exist.
 //
 // A "=~" prefix is added to the stringified regexp in the statistics
-// returned by GetCallCountInfo().
+// returned by [GetCallCountInfo].
 //
-// See RegisterResponder function and the "=~" prefix in its url
+// See [RegisterResponder] function and the "=~" prefix in its url
 // parameter to avoid compiling the regexp by yourself.
 //
 // If method is a lower-cased version of CONNECT, DELETE, GET, HEAD,
@@ -1023,29 +1040,29 @@ func RegisterRegexpResponder(method string, urlRegexp *regexp.Regexp, responder 
 	DefaultTransport.RegisterRegexpResponder(method, urlRegexp, responder)
 }
 
-// RegisterResponderWithQuery it is same as RegisterResponder, but
+// RegisterResponderWithQuery it is same as [RegisterResponder], but
 // doesn't depends on query items order.
 //
 // query type can be:
 //
-//	url.Values
-//	map[string]string
-//	string, a query string like "a=12&a=13&b=z&c" (see net/url.ParseQuery function)
+//   - [url.Values]
+//   - map[string]string
+//   - string, a query string like "a=12&a=13&b=z&c" (see [url.ParseQuery] function)
 //
 // If the query type is not recognized or the string cannot be parsed
-// using net/url.ParseQuery, a panic() occurs.
+// using [url.ParseQuery], a panic() occurs.
 //
-// Unlike RegisterResponder, path cannot be prefixed by "=~" to say it
+// Unlike [RegisterResponder], path cannot be prefixed by "=~" to say it
 // is a regexp. If it is, a panic occurs.
 //
 // Registering an already existing responder resets the corresponding
-// statistics as returned by GetCallCountInfo().
+// statistics as returned by [GetCallCountInfo].
 //
-// Registering a nil Responder removes the existing one and the
-// corresponding statistics as returned by GetCallCountInfo(). It does
+// Registering a nil [Responder] removes the existing one and the
+// corresponding statistics as returned by [GetCallCountInfo]. It does
 // nothing if it does not already exist.
 //
-// Example using a net/url.Values:
+// Example using a [url.Values]:
 //
 //	func TestFetchArticles(t *testing.T) {
 //	  httpmock.Activate()
@@ -1105,16 +1122,41 @@ func RegisterResponderWithQuery(method, path string, query any, responder Respon
 	DefaultTransport.RegisterResponderWithQuery(method, path, query, responder)
 }
 
-// RegisterNoResponder adds a mock that is called whenever a request
-// for an unregistered URL is received.  The default behavior is to
-// return a connection error.
+// RegisterNoResponder is used to register a responder that is called
+// if no other responders are found.  The default is [ConnectionFailure]
+// that returns a connection error.
+//
+// Use it in conjunction with [NewNotFoundResponder] to ensure that all
+// routes have been mocked:
+//
+//	import (
+//	  "testing"
+//	  "github.com/jarcoal/httpmock"
+//	)
+//	...
+//	func TestMyApp(t *testing.T) {
+//	   ...
+//	   // Calls testing.Fatal with the name of Responder-less route and
+//	   // the stack trace of the call.
+//	   httpmock.RegisterNoResponder(httpmock.NewNotFoundResponder(t.Fatal))
+//
+// will abort the current test and print something like:
+//
+//	transport_test.go:735: Called from net/http.Get()
+//	      at /go/src/github.com/jarcoal/httpmock/transport_test.go:714
+//	    github.com/jarcoal/httpmock.TestCheckStackTracer()
+//	      at /go/src/testing/testing.go:865
+//	    testing.tRunner()
+//	      at /go/src/runtime/asm_amd64.s:1337
+//
+// If responder is passed as nil, the default behavior
+// ([ConnectionFailure]) is re-enabled.
 //
 // In some cases you may not want all URLs to be mocked, in which case
 // you can do this:
 //
 //	func TestFetchArticles(t *testing.T) {
-//	  httpmock.Activate()
-//	  defer httpmock.DeactivateAndReset()
+//	  ...
 //	  httpmock.RegisterNoResponder(httpmock.InitialTransport.RoundTrip)
 //
 //	  // any requests that don't have a registered URL will be fetched normally
@@ -1128,9 +1170,10 @@ func RegisterNoResponder(responder Responder) {
 var ErrSubmatchNotFound = errors.New("submatch not found")
 
 // GetSubmatch has to be used in Responders installed by
-// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
-// allows to retrieve the n-th submatch of the matching regexp, as a
-// string. Example:
+// [RegisterRegexpResponder] or [RegisterResponder] + "=~" URL prefix
+// (as well as [MockTransport.RegisterRegexpResponder] or
+// [MockTransport.RegisterResponder]). It allows to retrieve the n-th
+// submatch of the matching regexp, as a string. Example:
 //
 //	RegisterResponder("GET", `=~^/item/name/([^/]+)\z`,
 //	  func(req *http.Request) (*http.Response, error) {
@@ -1144,7 +1187,7 @@ var ErrSubmatchNotFound = errors.New("submatch not found")
 //	    })
 //	  })
 //
-// It panics if n < 1. See MustGetSubmatch to avoid testing the
+// It panics if n < 1. See [MustGetSubmatch] to avoid testing the
 // returned error.
 func GetSubmatch(req *http.Request, n int) (string, error) {
 	if n <= 0 {
@@ -1160,9 +1203,10 @@ func GetSubmatch(req *http.Request, n int) (string, error) {
 }
 
 // GetSubmatchAsInt has to be used in Responders installed by
-// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
-// allows to retrieve the n-th submatch of the matching regexp, as an
-// int64. Example:
+// [RegisterRegexpResponder] or [RegisterResponder] + "=~" URL prefix
+// (as well as [MockTransport.RegisterRegexpResponder] or
+// [MockTransport.RegisterResponder]). It allows to retrieve the n-th
+// submatch of the matching regexp, as an int64. Example:
 //
 //	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
 //	  func(req *http.Request) (*http.Response, error) {
@@ -1176,7 +1220,7 @@ func GetSubmatch(req *http.Request, n int) (string, error) {
 //	    })
 //	  })
 //
-// It panics if n < 1. See MustGetSubmatchAsInt to avoid testing the
+// It panics if n < 1. See [MustGetSubmatchAsInt] to avoid testing the
 // returned error.
 func GetSubmatchAsInt(req *http.Request, n int) (int64, error) {
 	sm, err := GetSubmatch(req, n)
@@ -1187,9 +1231,10 @@ func GetSubmatchAsInt(req *http.Request, n int) (int64, error) {
 }
 
 // GetSubmatchAsUint has to be used in Responders installed by
-// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
-// allows to retrieve the n-th submatch of the matching regexp, as a
-// uint64. Example:
+// [RegisterRegexpResponder] or [RegisterResponder] + "=~" URL prefix
+// (as well as [MockTransport.RegisterRegexpResponder] or
+// [MockTransport.RegisterResponder]). It allows to retrieve the n-th
+// submatch of the matching regexp, as a uint64. Example:
 //
 //	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
 //	  func(req *http.Request) (*http.Response, error) {
@@ -1203,7 +1248,7 @@ func GetSubmatchAsInt(req *http.Request, n int) (int64, error) {
 //	    })
 //	  })
 //
-// It panics if n < 1. See MustGetSubmatchAsUint to avoid testing the
+// It panics if n < 1. See [MustGetSubmatchAsUint] to avoid testing the
 // returned error.
 func GetSubmatchAsUint(req *http.Request, n int) (uint64, error) {
 	sm, err := GetSubmatch(req, n)
@@ -1214,9 +1259,10 @@ func GetSubmatchAsUint(req *http.Request, n int) (uint64, error) {
 }
 
 // GetSubmatchAsFloat has to be used in Responders installed by
-// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
-// allows to retrieve the n-th submatch of the matching regexp, as a
-// float64. Example:
+// [RegisterRegexpResponder] or [RegisterResponder] + "=~" URL prefix
+// (as well as [MockTransport.RegisterRegexpResponder] or
+// [MockTransport.RegisterResponder]). It allows to retrieve the n-th
+// submatch of the matching regexp, as a float64. Example:
 //
 //	RegisterResponder("PATCH", `=~^/item/id/\d+\?height=(\d+(?:\.\d*)?)\z`,
 //	  func(req *http.Request) (*http.Response, error) {
@@ -1231,7 +1277,7 @@ func GetSubmatchAsUint(req *http.Request, n int) (uint64, error) {
 //	    })
 //	  })
 //
-// It panics if n < 1. See MustGetSubmatchAsFloat to avoid testing the
+// It panics if n < 1. See [MustGetSubmatchAsFloat] to avoid testing the
 // returned error.
 func GetSubmatchAsFloat(req *http.Request, n int) (float64, error) {
 	sm, err := GetSubmatch(req, n)
@@ -1241,11 +1287,12 @@ func GetSubmatchAsFloat(req *http.Request, n int) (float64, error) {
 	return strconv.ParseFloat(sm, 64)
 }
 
-// MustGetSubmatch works as GetSubmatch except that it panics in case
-// of error (submatch not found). It has to be used in Responders
-// installed by RegisterRegexpResponder or RegisterResponder + "=~"
-// URL prefix. It allows to retrieve the n-th submatch of the matching
-// regexp, as a string. Example:
+// MustGetSubmatch works as [GetSubmatch] except that it panics in
+// case of error (submatch not found). It has to be used in Responders
+// installed by [RegisterRegexpResponder] or [RegisterResponder] +
+// "=~" URL prefix (as well as [MockTransport.RegisterRegexpResponder]
+// or [MockTransport.RegisterResponder]). It allows to retrieve the
+// n-th submatch of the matching regexp, as a string. Example:
 //
 //	RegisterResponder("GET", `=~^/item/name/([^/]+)\z`,
 //	  func(req *http.Request) (*http.Response, error) {
@@ -1265,12 +1312,13 @@ func MustGetSubmatch(req *http.Request, n int) string {
 	return s
 }
 
-// MustGetSubmatchAsInt works as GetSubmatchAsInt except that it
+// MustGetSubmatchAsInt works as [GetSubmatchAsInt] except that it
 // panics in case of error (submatch not found or invalid int64
 // format). It has to be used in Responders installed by
-// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
-// allows to retrieve the n-th submatch of the matching regexp, as an
-// int64. Example:
+// [RegisterRegexpResponder] or [RegisterResponder] + "=~" URL prefix
+// (as well as [MockTransport.RegisterRegexpResponder] or
+// [MockTransport.RegisterResponder]). It allows to retrieve the n-th
+// submatch of the matching regexp, as an int64. Example:
 //
 //	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
 //	  func(req *http.Request) (*http.Response, error) {
@@ -1290,12 +1338,13 @@ func MustGetSubmatchAsInt(req *http.Request, n int) int64 {
 	return i
 }
 
-// MustGetSubmatchAsUint works as GetSubmatchAsUint except that it
+// MustGetSubmatchAsUint works as [GetSubmatchAsUint] except that it
 // panics in case of error (submatch not found or invalid uint64
 // format). It has to be used in Responders installed by
-// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
-// allows to retrieve the n-th submatch of the matching regexp, as a
-// uint64. Example:
+// [RegisterRegexpResponder] or [RegisterResponder] + "=~" URL prefix
+// (as well as [MockTransport.RegisterRegexpResponder] or
+// [MockTransport.RegisterResponder]). It allows to retrieve the n-th
+// submatch of the matching regexp, as a uint64. Example:
 //
 //	RegisterResponder("GET", `=~^/item/id/(\d+)\z`,
 //	  func(req *http.Request) (*http.Response, error) {
@@ -1315,12 +1364,13 @@ func MustGetSubmatchAsUint(req *http.Request, n int) uint64 {
 	return u
 }
 
-// MustGetSubmatchAsFloat works as GetSubmatchAsFloat except that it
+// MustGetSubmatchAsFloat works as [GetSubmatchAsFloat] except that it
 // panics in case of error (submatch not found or invalid float64
 // format). It has to be used in Responders installed by
-// RegisterRegexpResponder or RegisterResponder + "=~" URL prefix. It
-// allows to retrieve the n-th submatch of the matching regexp, as a
-// float64. Example:
+// [RegisterRegexpResponder] or [RegisterResponder] + "=~" URL prefix
+// (as well as [MockTransport.RegisterRegexpResponder] or
+// [MockTransport.RegisterResponder]). It allows to retrieve the n-th
+// submatch of the matching regexp, as a float64. Example:
 //
 //	RegisterResponder("PATCH", `=~^/item/id/\d+\?height=(\d+(?:\.\d*)?)\z`,
 //	  func(req *http.Request) (*http.Response, error) {
