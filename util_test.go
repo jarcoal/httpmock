@@ -1,7 +1,7 @@
 package httpmock_test
 
 import (
-	"io/ioutil"
+	"io/ioutil" //nolint: staticcheck
 	"net/http"
 	"os"
 	"testing"

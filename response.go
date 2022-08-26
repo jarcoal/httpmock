@@ -59,18 +59,19 @@ func (r Responder) times(name string, n int, fn ...func(...any)) Responder {
 // passed and non-nil, it acts as the fn parameter of
 // NewNotFoundResponder, allowing to dump the stack trace to localize
 // the origin of the call.
-//   import (
-//     "testing"
-//     "github.com/jarcoal/httpmock"
-//   )
-//   ...
-//   func TestMyApp(t *testing.T) {
-//     ...
-//     // This responder is callable 3 times, then an error is returned and
-//     // the stacktrace of the call logged using t.Log()
-//     httpmock.RegisterResponder("GET", "/foo/bar",
-//       httpmock.NewStringResponder(200, "{}").Times(3, t.Log),
-//     )
+//
+//	import (
+//	  "testing"
+//	  "github.com/jarcoal/httpmock"
+//	)
+//	...
+//	func TestMyApp(t *testing.T) {
+//	  ...
+//	  // This responder is callable 3 times, then an error is returned and
+//	  // the stacktrace of the call logged using t.Log()
+//	  httpmock.RegisterResponder("GET", "/foo/bar",
+//	    httpmock.NewStringResponder(200, "{}").Times(3, t.Log),
+//	  )
 func (r Responder) Times(n int, fn ...func(...any)) Responder {
 	return r.times("Times", n, fn...)
 }
@@ -80,18 +81,19 @@ func (r Responder) Times(n int, fn ...func(...any)) Responder {
 // and non-nil, it acts as the fn parameter of NewNotFoundResponder,
 // allowing to dump the stack trace to localize the origin of the
 // call.
-//   import (
-//     "testing"
-//     "github.com/jarcoal/httpmock"
-//   )
-//   ...
-//   func TestMyApp(t *testing.T) {
-//     ...
-//     // This responder is callable only once, then an error is returned and
-//     // the stacktrace of the call logged using t.Log()
-//     httpmock.RegisterResponder("GET", "/foo/bar",
-//       httpmock.NewStringResponder(200, "{}").Once(t.Log),
-//     )
+//
+//	import (
+//	  "testing"
+//	  "github.com/jarcoal/httpmock"
+//	)
+//	...
+//	func TestMyApp(t *testing.T) {
+//	  ...
+//	  // This responder is callable only once, then an error is returned and
+//	  // the stacktrace of the call logged using t.Log()
+//	  httpmock.RegisterResponder("GET", "/foo/bar",
+//	    httpmock.NewStringResponder(200, "{}").Once(t.Log),
+//	  )
 func (r Responder) Once(fn ...func(...any)) Responder {
 	return r.times("Once", 1, fn...)
 }
@@ -100,16 +102,17 @@ func (r Responder) Once(fn ...func(...any)) Responder {
 // of the original Responder using fn. It can be used in conjunction
 // with the testing package as in the example below with the help of
 // (*testing.T).Log method:
-//   import (
-//     "testing"
-//     "github.com/jarcoal/httpmock"
-//   )
-//   ...
-//   func TestMyApp(t *testing.T) {
-//     ...
-//     httpmock.RegisterResponder("GET", "/foo/bar",
-//       httpmock.NewStringResponder(200, "{}").Trace(t.Log),
-//     )
+//
+//	import (
+//	  "testing"
+//	  "github.com/jarcoal/httpmock"
+//	)
+//	...
+//	func TestMyApp(t *testing.T) {
+//	  ...
+//	  httpmock.RegisterResponder("GET", "/foo/bar",
+//	    httpmock.NewStringResponder(200, "{}").Trace(t.Log),
+//	  )
 func (r Responder) Trace(fn func(...any)) Responder {
 	return func(req *http.Request) (*http.Response, error) {
 		resp, err := r(req)
@@ -122,17 +125,18 @@ func (r Responder) Trace(fn func(...any)) Responder {
 
 // Delay returns a new Responder that calls the original r Responder
 // after a delay of d.
-//   import (
-//     "testing"
-//     "time"
-//     "github.com/jarcoal/httpmock"
-//   )
-//   ...
-//   func TestMyApp(t *testing.T) {
-//     ...
-//     httpmock.RegisterResponder("GET", "/foo/bar",
-//       httpmock.NewStringResponder(200, "{}").Delay(100*time.Millisecond),
-//     )
+//
+//	import (
+//	  "testing"
+//	  "time"
+//	  "github.com/jarcoal/httpmock"
+//	)
+//	...
+//	func TestMyApp(t *testing.T) {
+//	  ...
+//	  httpmock.RegisterResponder("GET", "/foo/bar",
+//	    httpmock.NewStringResponder(200, "{}").Delay(100*time.Millisecond),
+//	  )
 func (r Responder) Delay(d time.Duration) Responder {
 	return func(req *http.Request) (*http.Response, error) {
 		time.Sleep(d)
@@ -152,23 +156,25 @@ func (r Responder) similar(other Responder) bool {
 // Then returns a new Responder that calls r on first invocation, then
 // next on following ones, except when Then is chained, in this case
 // next is called only once:
-//   A := httpmock.NewStringResponder(200, "A")
-//   B := httpmock.NewStringResponder(200, "B")
-//   C := httpmock.NewStringResponder(200, "C")
 //
-//   httpmock.RegisterResponder("GET", "/pipo", A.Then(B).Then(C))
+//	A := httpmock.NewStringResponder(200, "A")
+//	B := httpmock.NewStringResponder(200, "B")
+//	C := httpmock.NewStringResponder(200, "C")
 //
-//   http.Get("http://foo.bar/pipo") // A is called
-//   http.Get("http://foo.bar/pipo") // B is called
-//   http.Get("http://foo.bar/pipo") // C is called
-//   http.Get("http://foo.bar/pipo") // C is called, and so on
+//	httpmock.RegisterResponder("GET", "/pipo", A.Then(B).Then(C))
+//
+//	http.Get("http://foo.bar/pipo") // A is called
+//	http.Get("http://foo.bar/pipo") // B is called
+//	http.Get("http://foo.bar/pipo") // C is called
+//	http.Get("http://foo.bar/pipo") // C is called, and so on
 //
 // A panic occurs if next is the result of another Then call (because
 // allowing it could cause inextricable problems at runtime). Then
 // calls can be chained, but cannot call each other by
 // parameter. Example:
-//   A.Then(B).Then(C) // is OK
-//   A.Then(B.Then(C)) // panics as A.Then() parameter is another Then() call
+//
+//	A.Then(B).Then(C) // is OK
+//	A.Then(B.Then(C)) // panics as A.Then() parameter is another Then() call
 func (r Responder) Then(next Responder) (x Responder) {
 	var done int
 	var mu sync.Mutex
@@ -254,24 +260,25 @@ func ResponderFromResponse(resp *http.Response) Responder {
 // and non-nil, it acts as the fn parameter of NewNotFoundResponder,
 // allowing to dump the stack trace to localize the origin of the
 // call.
-//   import (
-//     "github.com/jarcoal/httpmock"
-//     "testing"
-//   )
-//   ...
-//   func TestMyApp(t *testing.T) {
-//     ...
-//     // This responder is callable only once, then an error is returned and
-//     // the stacktrace of the call logged using t.Log()
-//     httpmock.RegisterResponder("GET", "/foo/bar",
-//       httpmock.ResponderFromMultipleResponses(
-//         []*http.Response{
-//           httpmock.NewStringResponse(200, `{"name":"bar"}`),
-//           httpmock.NewStringResponse(404, `{"mesg":"Not found"}`),
-//         },
-//         t.Log),
-//     )
-//   }
+//
+//	import (
+//	  "github.com/jarcoal/httpmock"
+//	  "testing"
+//	)
+//	...
+//	func TestMyApp(t *testing.T) {
+//	  ...
+//	  // This responder is callable only once, then an error is returned and
+//	  // the stacktrace of the call logged using t.Log()
+//	  httpmock.RegisterResponder("GET", "/foo/bar",
+//	    httpmock.ResponderFromMultipleResponses(
+//	      []*http.Response{
+//	        httpmock.NewStringResponse(200, `{"name":"bar"}`),
+//	        httpmock.NewStringResponse(404, `{"mesg":"Not found"}`),
+//	      },
+//	      t.Log),
+//	  )
+//	}
 func ResponderFromMultipleResponses(responses []*http.Response, fn ...func(...any)) Responder {
 	responseIndex := 0
 	mutex := sync.Mutex{}
@@ -321,24 +328,26 @@ func NewErrorResponder(err error) Responder {
 // mocked.
 //
 // Example of use:
-//   import (
-//     "testing"
-//     "github.com/jarcoal/httpmock"
-//   )
-//   ...
-//   func TestMyApp(t *testing.T) {
-//      ...
-//      // Calls testing.Fatal with the name of Responder-less route and
-//      // the stack trace of the call.
-//      httpmock.RegisterNoResponder(httpmock.NewNotFoundResponder(t.Fatal))
+//
+//	import (
+//	  "testing"
+//	  "github.com/jarcoal/httpmock"
+//	)
+//	...
+//	func TestMyApp(t *testing.T) {
+//	   ...
+//	   // Calls testing.Fatal with the name of Responder-less route and
+//	   // the stack trace of the call.
+//	   httpmock.RegisterNoResponder(httpmock.NewNotFoundResponder(t.Fatal))
 //
 // Will abort the current test and print something like:
-//   transport_test.go:735: Called from net/http.Get()
-//         at /go/src/github.com/jarcoal/httpmock/transport_test.go:714
-//       github.com/jarcoal/httpmock.TestCheckStackTracer()
-//         at /go/src/testing/testing.go:865
-//       testing.tRunner()
-//         at /go/src/runtime/asm_amd64.s:1337
+//
+//	transport_test.go:735: Called from net/http.Get()
+//	      at /go/src/github.com/jarcoal/httpmock/transport_test.go:714
+//	    github.com/jarcoal/httpmock.TestCheckStackTracer()
+//	      at /go/src/testing/testing.go:865
+//	    testing.tRunner()
+//	      at /go/src/runtime/asm_amd64.s:1337
 func NewNotFoundResponder(fn func(...any)) Responder {
 	return func(req *http.Request) (*http.Response, error) {
 		var extra string
@@ -357,7 +366,8 @@ func NewNotFoundResponder(fn func(...any)) Responder {
 // the given string.  Also accepts an http status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewStringResponse(200, httpmock.File("body.txt").String())
+//
+//	httpmock.NewStringResponse(200, httpmock.File("body.txt").String())
 func NewStringResponse(status int, body string) *http.Response {
 	return &http.Response{
 		Status:        strconv.Itoa(status),
@@ -371,7 +381,8 @@ func NewStringResponse(status int, body string) *http.Response {
 // NewStringResponder creates a Responder from a given body (as a string) and status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewStringResponder(200, httpmock.File("body.txt").String())
+//
+//	httpmock.NewStringResponder(200, httpmock.File("body.txt").String())
 func NewStringResponder(status int, body string) Responder {
 	return ResponderFromResponse(NewStringResponse(status, body))
 }
@@ -380,7 +391,8 @@ func NewStringResponder(status int, body string) Responder {
 // given bytes.  Also accepts an http status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewBytesResponse(200, httpmock.File("body.raw").Bytes())
+//
+//	httpmock.NewBytesResponse(200, httpmock.File("body.raw").Bytes())
 func NewBytesResponse(status int, body []byte) *http.Response {
 	return &http.Response{
 		Status:        strconv.Itoa(status),
@@ -395,7 +407,8 @@ func NewBytesResponse(status int, body []byte) *http.Response {
 // slice) and status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewBytesResponder(200, httpmock.File("body.raw").Bytes())
+//
+//	httpmock.NewBytesResponder(200, httpmock.File("body.raw").Bytes())
 func NewBytesResponder(status int, body []byte) Responder {
 	return ResponderFromResponse(NewBytesResponse(status, body))
 }
@@ -405,7 +418,8 @@ func NewBytesResponder(status int, body []byte) Responder {
 // an http status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewJsonResponse(200, httpmock.File("body.json"))
+//
+//	httpmock.NewJsonResponse(200, httpmock.File("body.json"))
 func NewJsonResponse(status int, body any) (*http.Response, error) { // nolint: revive
 	encoded, err := json.Marshal(body)
 	if err != nil {
@@ -420,7 +434,8 @@ func NewJsonResponse(status int, body any) (*http.Response, error) { // nolint: 
 // any that is encoded to json) and status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewJsonResponder(200, httpmock.File("body.json"))
+//
+//	httpmock.NewJsonResponder(200, httpmock.File("body.json"))
 func NewJsonResponder(status int, body any) (Responder, error) { // nolint: revive
 	resp, err := NewJsonResponse(status, body)
 	if err != nil {
@@ -434,14 +449,16 @@ func NewJsonResponder(status int, body any) (Responder, error) { // nolint: revi
 // It simplifies the call of RegisterResponder, avoiding the use of a
 // temporary variable and an error check, and so can be used as
 // NewStringResponder or NewBytesResponder in such context:
-//   httpmock.RegisterResponder(
-//     "GET",
-//     "/test/path",
-//     httpmock.NewJSONResponderOrPanic(200, &MyBody),
-//   )
+//
+//	httpmock.RegisterResponder(
+//	  "GET",
+//	  "/test/path",
+//	  httpmock.NewJSONResponderOrPanic(200, &MyBody),
+//	)
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewJsonResponderOrPanic(200, httpmock.File("body.json"))
+//
+//	httpmock.NewJsonResponderOrPanic(200, httpmock.File("body.json"))
 func NewJsonResponderOrPanic(status int, body any) Responder { // nolint: revive
 	responder, err := NewJsonResponder(status, body)
 	if err != nil {
@@ -455,7 +472,8 @@ func NewJsonResponderOrPanic(status int, body any) Responder { // nolint: revive
 // http status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewXmlResponse(200, httpmock.File("body.xml"))
+//
+//	httpmock.NewXmlResponse(200, httpmock.File("body.xml"))
 func NewXmlResponse(status int, body any) (*http.Response, error) { // nolint: revive
 	var (
 		encoded []byte
@@ -478,7 +496,8 @@ func NewXmlResponse(status int, body any) (*http.Response, error) { // nolint: r
 // any that is encoded to xml) and status code.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewXmlResponder(200, httpmock.File("body.xml"))
+//
+//	httpmock.NewXmlResponder(200, httpmock.File("body.xml"))
 func NewXmlResponder(status int, body any) (Responder, error) { // nolint: revive
 	resp, err := NewXmlResponse(status, body)
 	if err != nil {
@@ -492,14 +511,16 @@ func NewXmlResponder(status int, body any) (Responder, error) { // nolint: reviv
 // It simplifies the call of RegisterResponder, avoiding the use of a
 // temporary variable and an error check, and so can be used as
 // NewStringResponder or NewBytesResponder in such context:
-//   httpmock.RegisterResponder(
-//     "GET",
-//     "/test/path",
-//     httpmock.NewXmlResponderOrPanic(200, &MyBody),
-//   )
+//
+//	httpmock.RegisterResponder(
+//	  "GET",
+//	  "/test/path",
+//	  httpmock.NewXmlResponderOrPanic(200, &MyBody),
+//	)
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewXmlResponderOrPanic(200, httpmock.File("body.xml"))
+//
+//	httpmock.NewXmlResponderOrPanic(200, httpmock.File("body.xml"))
 func NewXmlResponderOrPanic(status int, body any) Responder { // nolint: revive
 	responder, err := NewXmlResponder(status, body)
 	if err != nil {
@@ -512,7 +533,8 @@ func NewXmlResponderOrPanic(status int, body any) Responder { // nolint: revive
 // is suitable for use as an http response body.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewRespBodyFromString(httpmock.File("body.txt").String())
+//
+//	httpmock.NewRespBodyFromString(httpmock.File("body.txt").String())
 func NewRespBodyFromString(body string) io.ReadCloser {
 	return &dummyReadCloser{orig: body}
 }
@@ -521,7 +543,8 @@ func NewRespBodyFromString(body string) io.ReadCloser {
 // that is suitable for use as an http response body.
 //
 // To pass the content of an existing file as body use httpmock.File as in:
-//   httpmock.NewRespBodyFromBytes(httpmock.File("body.txt").Bytes())
+//
+//	httpmock.NewRespBodyFromBytes(httpmock.File("body.txt").Bytes())
 func NewRespBodyFromBytes(body []byte) io.ReadCloser {
 	return &dummyReadCloser{orig: body}
 }

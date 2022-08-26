@@ -4,7 +4,7 @@ Easy mocking of http responses from external resources.
 
 ## Install
 
-Currently supports Go 1.9 - 1.18.
+Currently supports Go 1.9 - 1.19.
 
 `v1` branch has to be used instead of `master`.
 
