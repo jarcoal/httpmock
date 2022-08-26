@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"io/ioutil" //nolint: staticcheck
 	"net/http"
 	"path/filepath"
 	"strings"
