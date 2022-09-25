@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil" //nolint: staticcheck
 	"net"
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,6 +92,176 @@ func TestMockTransport(t *testing.T) {
 			assert.Cmp(res, []string{"hello world"})
 		})
 	}
+}
+
+func TestRegisterMatcherResponder(t *testing.T) {
+	Activate()
+	defer DeactivateAndReset()
+
+	RegisterMatcherResponder("POST", "/foo",
+		NewMatcher(
+			"00-header-foo=bar",
+			func(r *http.Request) bool { return r.Header.Get("Foo") == "bar" },
+		),
+		NewStringResponder(200, "header-foo"))
+
+	RegisterMatcherResponder("POST", "/foo",
+		NewMatcher(
+			"01-body-BAR",
+			func(r *http.Request) bool {
+				b, err := ioutil.ReadAll(r.Body)
+				return err == nil && bytes.Contains(b, []byte("BAR"))
+			}),
+		NewStringResponder(200, "body-BAR"))
+
+	RegisterMatcherResponder("POST", "/foo",
+		NewMatcher(
+			"02-body-FOO",
+			func(r *http.Request) bool {
+				b, err := ioutil.ReadAll(r.Body)
+				return err == nil && bytes.Contains(b, []byte("FOO"))
+			}),
+		NewStringResponder(200, "body-FOO"))
+
+	RegisterResponder("POST", "/foo", NewStringResponder(200, "default"))
+
+	RegisterNoResponder(NewNotFoundResponder(nil))
+
+	testCases := []struct {
+		name         string
+		body         string
+		fooHeader    string
+		expectedBody string
+	}{
+		{
+			name:         "header",
+			body:         "pipo",
+			fooHeader:    "bar",
+			expectedBody: "header-foo",
+		},
+		{
+			name:         "header+body=header",
+			body:         "BAR",
+			fooHeader:    "bar",
+			expectedBody: "header-foo",
+		},
+		{
+			name:         "body BAR",
+			body:         "BAR",
+			fooHeader:    "xxx",
+			expectedBody: "body-BAR",
+		},
+		{
+			name:         "body FOO",
+			body:         "FOO",
+			expectedBody: "body-FOO",
+		},
+		{
+			name:         "default",
+			body:         "ANYTHING",
+			fooHeader:    "zzz",
+			expectedBody: "default",
+		},
+	}
+	assert := td.Assert(t)
+	for _, tc := range testCases {
+		assert.RunAssertRequire(tc.name, func(assert, require *td.T) {
+			req, err := http.NewRequest(
+				"POST",
+				"http://test.com/foo",
+				strings.NewReader(tc.body),
+			)
+			require.CmpNoError(err)
+
+			req.Header.Set("Content-Type", "text/plain")
+			if tc.fooHeader != "" {
+				req.Header.Set("Foo", tc.fooHeader)
+			}
+
+			resp, err := http.DefaultClient.Do(req)
+			require.CmpNoError(err)
+
+			assertBody(assert, resp, tc.expectedBody)
+		})
+	}
+
+	// Remove the default responder
+	RegisterResponder("POST", "/foo", nil)
+
+	assert.Run("not found despite 3", func(assert *td.T) {
+		_, err := http.Post(
+			"http://test.com/foo",
+			"text/plain",
+			strings.NewReader("ANYTHING"),
+		)
+		assert.HasSuffix(err, `Responder not found for POST http://test.com/foo despite 3 matchers: ["00-header-foo=bar" "01-body-BAR" "02-body-FOO"]`)
+	})
+
+	// Remove 2 matcher responders
+	RegisterMatcherResponder("POST", "/foo", NewMatcher("01-body-BAR", nil), nil)
+	RegisterMatcherResponder("POST", "/foo", NewMatcher("02-body-FOO", nil), nil)
+
+	assert.Run("not found despite 1", func(assert *td.T) {
+		_, err := http.Post(
+			"http://test.com/foo",
+			"text/plain",
+			strings.NewReader("ANYTHING"),
+		)
+		assert.HasSuffix(err, `Responder not found for POST http://test.com/foo despite matcher "00-header-foo=bar"`)
+	})
+
+	// Add a regexp responder without a Matcher: as the exact match
+	// didn't succeed because of the "00-header-foo=bar" Matcher, the
+	// following one must be tried ans also succeed
+	RegisterResponder("POST", "=~^/foo", NewStringResponder(200, "regexp"))
+
+	assert.RunAssertRequire("default regexp", func(assert, require *td.T) {
+		resp, err := http.Post(
+			"http://test.com/foo",
+			"text/plain",
+			strings.NewReader("ANYTHING"),
+		)
+		// The exact match responder "00-header-foo=bar" fails because of
+		// its Matcher, so regexp responders have to be checked and ^/foo
+		// has to match
+		require.CmpNoError(err)
+		assertBody(assert, resp, "regexp")
+	})
+
+	// Remove the previous regexp responder
+	RegisterResponder("POST", "=~^/foo", nil)
+
+	// Add a regexp Matcher responder that should match ZIP body
+	RegisterMatcherResponder("POST", "=~^/foo",
+		BodyContainsString("ZIP").WithName("10-body-ZIP"),
+		NewStringResponder(200, "body-ZIP"))
+
+	assert.RunAssertRequire("regexp matcher OK", func(assert, require *td.T) {
+		resp, err := http.Post(
+			"http://test.com/foo",
+			"text/plain",
+			strings.NewReader("ZIP"),
+		)
+		// The exact match responder "00-header-foo=bar" fails because of
+		// its Matcher, so regexp responders have to be checked and ^/foo
+		// + body ZIP has to match
+		require.CmpNoError(err)
+		assertBody(assert, resp, "body-ZIP")
+	})
+
+	assert.Run("regexp matcher no match", func(assert *td.T) {
+		_, err := http.Post(
+			"http://test.com/foo",
+			"text/plain",
+			strings.NewReader("ANYTHING"),
+		)
+		// The exact match responder "00-header-foo=bar" fails because of
+		// its Matcher, so regexp responders have to be checked BUT none
+		// match. In this case the returned error has to be the first
+		// encountered, so the one corresponding to the exact match phase,
+		// not the regexp one
+		assert.HasSuffix(err, `Responder not found for POST http://test.com/foo despite matcher "00-header-foo=bar"`)
+	})
 }
 
 // We should be able to find GET handlers when using an http.Request with a
@@ -560,6 +732,9 @@ func TestMockTransportCallCountReset(t *testing.T) {
 
 	RegisterResponder("GET", url, NewStringResponder(200, "body"))
 	RegisterResponder("POST", "=~gitlab", NewStringResponder(200, "body"))
+	RegisterMatcherResponder("POST", "=~gitlab",
+		BodyContainsString("pipo").WithName("pipo-in-body"),
+		NewStringResponder(200, "body"))
 
 	_, err := http.Get(url)
 	require.CmpNoError(err)
@@ -569,15 +744,23 @@ func TestMockTransportCallCountReset(t *testing.T) {
 	_, err = http.Post(url2, "application/json", buff)
 	require.CmpNoError(err)
 
+	buff.Reset()
+	json.NewEncoder(buff).Encode(`{"pipo":"bingo"}`) // nolint: errcheck
+	_, err = http.Post(url2, "application/json", buff)
+	require.CmpNoError(err)
+
 	_, err = http.Get(url)
 	require.CmpNoError(err)
 
-	assert.Cmp(GetTotalCallCount(), 3)
+	assert.Cmp(GetTotalCallCount(), 2+1+1)
 	assert.Cmp(GetCallCountInfo(), map[string]int{
 		"GET " + url: 2,
 		// Regexp match generates 2 entries:
 		"POST " + url2:  1, // the matched call
 		"POST =~gitlab": 1, // the regexp responder
+		// Regexp + matcher match also generates 2 entries:
+		"POST " + url2 + " <pipo-in-body>": 1, // matched call
+		"POST =~gitlab <pipo-in-body>":     1, // the regexp responder with matcher
 	})
 
 	Reset()
@@ -600,6 +783,9 @@ func TestMockTransportCallCountZero(t *testing.T) {
 
 	RegisterResponder("GET", url, NewStringResponder(200, "body"))
 	RegisterResponder("POST", "=~gitlab", NewStringResponder(200, "body"))
+	RegisterMatcherResponder("POST", "=~gitlab",
+		BodyContainsString("pipo").WithName("pipo-in-body"),
+		NewStringResponder(200, "body"))
 
 	_, err := http.Get(url)
 	require.CmpNoError(err)
@@ -609,15 +795,23 @@ func TestMockTransportCallCountZero(t *testing.T) {
 	_, err = http.Post(url2, "application/json", buff)
 	require.CmpNoError(err)
 
+	buff.Reset()
+	json.NewEncoder(buff).Encode(`{"pipo":"bingo"}`) // nolint: errcheck
+	_, err = http.Post(url2, "application/json", buff)
+	require.CmpNoError(err)
+
 	_, err = http.Get(url)
 	require.CmpNoError(err)
 
-	assert.Cmp(GetTotalCallCount(), 3)
+	assert.Cmp(GetTotalCallCount(), 2+1+1)
 	assert.Cmp(GetCallCountInfo(), map[string]int{
 		"GET " + url: 2,
 		// Regexp match generates 2 entries:
 		"POST " + url2:  1, // the matched call
 		"POST =~gitlab": 1, // the regexp responder
+		// Regexp + matcher match also generates 2 entries:
+		"POST " + url2 + " <pipo-in-body>": 1, // matched call
+		"POST =~gitlab <pipo-in-body>":     1, // the regexp responder with matcher
 	})
 
 	ZeroCallCounters()
@@ -628,16 +822,21 @@ func TestMockTransportCallCountZero(t *testing.T) {
 		// Regexp match generates 2 entries:
 		"POST " + url2:  0, // the matched call
 		"POST =~gitlab": 0, // the regexp responder
+		// Regexp + matcher match also generates 2 entries:
+		"POST " + url2 + " <pipo-in-body>": 0, // matched call
+		"POST =~gitlab <pipo-in-body>":     0, // the regexp responder with matcher
 	})
 
 	// Unregister each responder
 	RegisterResponder("GET", url, nil)
 	RegisterResponder("POST", "=~gitlab", nil)
+	RegisterMatcherResponder("POST", "=~gitlab", NewMatcher("pipo-in-body", nil), nil)
 
 	assert.Cmp(GetCallCountInfo(), map[string]int{
-		// this one remains as it is not directly related to a registered
-		// responder but a consequence of a regexp match
-		"POST " + url2: 0,
+		// these ones remain as they are not directly related to a
+		// registered responder but a consequence of a regexp match
+		"POST " + url2:                     0,
+		"POST " + url2 + " <pipo-in-body>": 0,
 	})
 }
 
@@ -780,13 +979,46 @@ func TestRegisterRegexpResponder(t *testing.T) {
 
 	rx := regexp.MustCompile("ex.mple")
 
-	RegisterRegexpResponder("GET", rx, NewStringResponder(200, "first"))
+	RegisterRegexpResponder("POST", rx, NewStringResponder(200, "first"))
 	// Overwrite responder
-	RegisterRegexpResponder("GET", rx, NewStringResponder(200, "second"))
+	RegisterRegexpResponder("POST", rx, NewStringResponder(200, "second"))
 
-	resp, err := http.Get(testURL)
+	resp, err := http.Post(testURL, "text/plain", strings.NewReader("PIPO"))
 	td.Require(t).CmpNoError(err)
+	assertBody(t, resp, "second")
 
+	RegisterRegexpMatcherResponder("POST", rx,
+		BodyContainsString("PIPO").WithName("01-body-PIPO"),
+		NewStringResponder(200, "matcher-PIPO"))
+
+	RegisterRegexpMatcherResponder("POST", rx,
+		BodyContainsString("BINGO").WithName("02-body-BINGO"),
+		NewStringResponder(200, "matcher-BINGO"))
+
+	resp, err = http.Post(testURL, "text/plain", strings.NewReader("PIPO"))
+	td.Require(t).CmpNoError(err)
+	assertBody(t, resp, "matcher-PIPO")
+
+	resp, err = http.Post(testURL, "text/plain", strings.NewReader("BINGO"))
+	td.Require(t).CmpNoError(err)
+	assertBody(t, resp, "matcher-BINGO")
+
+	// Remove 01-body-PIPO matcher
+	RegisterRegexpMatcherResponder("POST", rx, NewMatcher("01-body-PIPO", nil), nil)
+
+	resp, err = http.Post(testURL, "text/plain", strings.NewReader("PIPO"))
+	td.Require(t).CmpNoError(err)
+	assertBody(t, resp, "second")
+
+	resp, err = http.Post(testURL, "text/plain", strings.NewReader("BINGO"))
+	td.Require(t).CmpNoError(err)
+	assertBody(t, resp, "matcher-BINGO")
+
+	// Remove 02-body-BINGO matcher
+	RegisterRegexpMatcherResponder("POST", rx, NewMatcher("02-body-BINGO", nil), nil)
+
+	resp, err = http.Post(testURL, "text/plain", strings.NewReader("BINGO"))
+	td.Require(t).CmpNoError(err)
 	assertBody(t, resp, "second")
 }
 

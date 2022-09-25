@@ -357,7 +357,11 @@ func NewNotFoundResponder(fn func(...any)) Responder {
 		var extra string
 		suggested, _ := req.Context().Value(suggestedKey).(*suggestedInfo)
 		if suggested != nil {
-			extra = fmt.Sprintf(`, but one matches %s %q`, suggested.kind, suggested.suggested)
+			if suggested.kind == "matcher" {
+				extra = fmt.Sprintf(` despite %s`, suggested.suggested)
+			} else {
+				extra = fmt.Sprintf(`, but one matches %s %q`, suggested.kind, suggested.suggested)
+			}
 		}
 		return nil, internal.StackTracer{
 			CustomFn: fn,

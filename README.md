@@ -65,8 +65,7 @@ func TestFetchArticles(t *testing.T) {
         return httpmock.NewStringResponse(500, ""), nil
       }
       return resp, nil
-    },
-  )
+    })
 
   // return an article related to the request with the help of regexp submatch (\d+)
   httpmock.RegisterResponder("GET", `=~^https://api\.mybiz\.com/articles/id/(\d+)\z`,
@@ -77,8 +76,7 @@ func TestFetchArticles(t *testing.T) {
         "id":   id,
         "name": "My Great Article",
       })
-    },
-  )
+    })
 
   // mock to add a new article
   httpmock.RegisterResponder("POST", "https://api.mybiz.com/articles",
@@ -95,8 +93,13 @@ func TestFetchArticles(t *testing.T) {
         return httpmock.NewStringResponse(500, ""), nil
       }
       return resp, nil
-    },
-  )
+    })
+
+  // mock to add a specific article, send a Bad Request response
+  // when the request body contains `"type":"toy"`
+  httpmock.RegisterMatcherResponder("POST", "https://api.mybiz.com/articles",
+    httpmock.BodyContainsString(`"type":"toy"`),
+    httpmock.NewStringResponder(400, `{"reason":"Invalid article type"}`))
 
   // do stuff that adds and checks articles
 }
