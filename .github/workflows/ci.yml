@@ -10,7 +10,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.9.x, 1.10.x, 1.11.x, 1.12.x, 1.13.x, 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x, tip]
+        go-version: [1.13.x, 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x, tip]
         full-tests: [false]
         include:
           - go-version: 1.19.x
@@ -31,7 +31,7 @@ jobs:
         if: matrix.full-tests
         run: |
           curl -sL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh |
-              sh -s -- -b $HOME/go/bin v1.49.0
+              sh -s -- -b $HOME/go/bin v1.50.1
           $HOME/go/bin/golangci-lint run --max-issues-per-linter 0 \
                                          --max-same-issues 0 \
                                          -E bidichk \
@@ -54,15 +54,6 @@ jobs:
           if [ ${{ matrix.full-tests }} = true ]; then
               GO_TEST_OPTS="-covermode=atomic -coverprofile=coverage.out"
           fi
-          case ${{ matrix.go-version }} in
-              1.9.x | 1.10.x) # Before go 1.11, go modules are not available
-                  mkdir -p ../src/github.com/$GITHUB_REPOSITORY_OWNER
-                  ln -s $(pwd) ../src/github.com/$GITHUB_REPOSITORY
-                  export GOPATH=$(dirname $(pwd))
-                  cd $GOPATH/src/github.com/$GITHUB_REPOSITORY
-                  go get -t ./...
-                  ;;
-          esac
           export GORACE="halt_on_error=1"
           go test -race $GO_TEST_OPTS ./...
 
@@ -71,5 +62,5 @@ jobs:
         env:
           COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          go install github.com/mattn/goveralls@v0.0.9
+          go install github.com/mattn/goveralls@v0.0.11
           goveralls -coverprofile=coverage.out -service=github
