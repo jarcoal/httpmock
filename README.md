@@ -4,12 +4,9 @@ Easy mocking of http responses from external resources.
 
 ## Install
 
-Currently supports Go 1.9 - 1.19.
+Currently supports Go 1.13 to 1.19 and is regularly tested against tip.
 
 `v1` branch has to be used instead of `master`.
-
-
-### Using go modules (aka. `go mod`)
 
 In your go files, simply use:
 ```go
@@ -17,47 +14,8 @@ import "github.com/jarcoal/httpmock"
 ```
 
 Then next `go mod tidy` or `go test` invocation will automatically
-populate your `go.mod` with the last httpmock release, now
+populate your `go.mod` with the latest httpmock release, now
 [![Version](https://img.shields.io/github/tag/jarcoal/httpmock.svg)](https://github.com/jarcoal/httpmock/releases).
-
-Note you can use `go mod vendor` to vendor your dependencies.
-
-
-### Using `$GOPATH`
-
-`v1` branch is configured as the default branch in github, so:
-```
-go get github.com/jarcoal/httpmock
-```
-
-automatically downloads the `v1` branch in `$GOPATH/src`. Then in your
-go files use:
-```go
-import "github.com/jarcoal/httpmock"
-```
-
-
-### Vendoring, using [`govendor`](https://github.com/kardianos/govendor) for example
-
-When vendoring is used, `v1` branch has to be specified. Two choices here:
-
-- preferred way:
-  ```
-  govendor fetch github.com/jarcoal/httpmock@v1
-  ```
-  then in go files:
-  ```go
-  import "github.com/jarcoal/httpmock"
-  ```
-- old way (before `v1` was set as default branch), use gopkg to read from
-  `v1` branch:
-  ```
-  govendor fetch gopkg.in/jarcoal/httpmock.v1
-  ```
-  then in go files:
-  ```go
-  import "gopkg.in/jarcoal/httpmock.v1"
-  ```
 
 
 ## Usage
@@ -107,8 +65,7 @@ func TestFetchArticles(t *testing.T) {
         return httpmock.NewStringResponse(500, ""), nil
       }
       return resp, nil
-    },
-  )
+    })
 
   // return an article related to the request with the help of regexp submatch (\d+)
   httpmock.RegisterResponder("GET", `=~^https://api\.mybiz\.com/articles/id/(\d+)\z`,
@@ -119,8 +76,7 @@ func TestFetchArticles(t *testing.T) {
         "id":   id,
         "name": "My Great Article",
       })
-    },
-  )
+    })
 
   // mock to add a new article
   httpmock.RegisterResponder("POST", "https://api.mybiz.com/articles",
@@ -137,8 +93,13 @@ func TestFetchArticles(t *testing.T) {
         return httpmock.NewStringResponse(500, ""), nil
       }
       return resp, nil
-    },
-  )
+    })
+
+  // mock to add a specific article, send a Bad Request response
+  // when the request body contains `"type":"toy"`
+  httpmock.RegisterMatcherResponder("POST", "https://api.mybiz.com/articles",
+    httpmock.BodyContainsString(`"type":"toy"`),
+    httpmock.NewStringResponder(400, `{"reason":"Invalid article type"}`))
 
   // do stuff that adds and checks articles
 }
