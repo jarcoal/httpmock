@@ -611,3 +611,20 @@ func TestParallelResponder(t *testing.T) {
 		wg.Wait()
 	}
 }
+
+func TestResponseContentLength(t *testing.T) {
+	stringResponseBody := "body"
+	sr := NewStringResponse(200, stringResponseBody)
+
+	if sr.ContentLength != int64(len(stringResponseBody)) {
+		t.Fatal("NewStringResponse ContentLength was not set")
+	}
+
+	bytesResponseBody := []byte{0}
+	br := NewBytesResponse(200, bytesResponseBody)
+
+	if br.ContentLength != int64(len(bytesResponseBody)) {
+		t.Fatal("NewBytesResponse ContentLength was not set")
+	}
+
+}

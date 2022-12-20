@@ -382,7 +382,7 @@ func NewStringResponse(status int, body string) *http.Response {
 		StatusCode:    status,
 		Body:          NewRespBodyFromString(body),
 		Header:        http.Header{},
-		ContentLength: -1,
+		ContentLength: int64(len(body)),
 	}
 }
 
@@ -408,7 +408,7 @@ func NewBytesResponse(status int, body []byte) *http.Response {
 		StatusCode:    status,
 		Body:          NewRespBodyFromBytes(body),
 		Header:        http.Header{},
-		ContentLength: -1,
+		ContentLength: int64(len(body)),
 	}
 }
 
