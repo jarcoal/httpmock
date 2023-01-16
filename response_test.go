@@ -8,6 +8,7 @@ import (
 	"io/ioutil" //nolint: staticcheck
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -583,6 +584,171 @@ func TestResponder_Then(t *testing.T) {
 		assert.CmpPanic(
 			func() { A.Then(B.Then(C)) },
 			"Then() does not accept another Then() Responder as parameter")
+	})
+}
+
+func TestResponder_SetContentLength(t *testing.T) {
+	assert, require := td.AssertRequire(t)
+
+	req, err := http.NewRequest(http.MethodGet, "http://foo.bar", nil)
+	require.CmpNoError(err)
+
+	testCases := []struct {
+		name   string
+		r      Responder
+		expLen int
+	}{
+		{
+			name: "nil body",
+			r: ResponderFromResponse(&http.Response{
+				StatusCode:    200,
+				ContentLength: -1,
+			}),
+			expLen: 0,
+		},
+		{
+			name: "http.NoBody",
+			r: ResponderFromResponse(&http.Response{
+				Body:          http.NoBody,
+				StatusCode:    200,
+				ContentLength: -1,
+			}),
+			expLen: 0,
+		},
+		{
+			name:   "string",
+			r:      NewStringResponder(200, "BODY"),
+			expLen: 4,
+		},
+		{
+			name:   "bytes",
+			r:      NewBytesResponder(200, []byte("BODY")),
+			expLen: 4,
+		},
+		{
+			name: "from response OK",
+			r: ResponderFromResponse(&http.Response{
+				Body:          NewRespBodyFromString("BODY"),
+				StatusCode:    200,
+				ContentLength: -1,
+			}),
+			expLen: 4,
+		},
+		{
+			name: "custom without Len",
+			r: func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					Body:          ioutil.NopCloser(strings.NewReader("BODY")),
+					StatusCode:    200,
+					ContentLength: -1,
+				}, nil
+			},
+			expLen: 4,
+		},
+	}
+	for _, tc := range testCases {
+		assert.Run(tc.name, func(assert *td.T) {
+			sclr := tc.r.SetContentLength()
+
+			for i := 1; i <= 3; i++ {
+				assert.RunAssertRequire(fmt.Sprintf("#%d", i), func(assert, require *td.T) {
+					resp, err := sclr(req)
+					require.CmpNoError(err)
+					assert.CmpLax(resp.ContentLength, tc.expLen)
+					assert.Cmp(resp.Header.Get("Content-Length"), strconv.Itoa(tc.expLen))
+				})
+			}
+		})
+	}
+
+	assert.Run("error", func(assert *td.T) {
+		resp, err := NewErrorResponder(errors.New("an error occurred")).
+			SetContentLength()(req)
+		assert.Nil(resp)
+		assert.String(err, "an error occurred")
+	})
+}
+
+func TestResponder_HeaderAddSet(t *testing.T) {
+	assert, require := td.AssertRequire(t)
+
+	req, err := http.NewRequest(http.MethodGet, "http://foo.bar", nil)
+	require.CmpNoError(err)
+
+	orig := NewStringResponder(200, "body")
+	origNilHeader := ResponderFromResponse(&http.Response{
+		Status:        "200",
+		StatusCode:    200,
+		Body:          NewRespBodyFromString("body"),
+		ContentLength: -1,
+	})
+
+	// until go1.17, http.Header cannot contain nil values after a Header.Clone()
+	clonedNil := http.Header{"Nil": nil}.Clone()["Nil"]
+
+	testCases := []struct {
+		name string
+		orig Responder
+	}{
+		{name: "orig", orig: orig},
+		{name: "nil header", orig: origNilHeader},
+	}
+	assert.RunAssertRequire("HeaderAdd", func(assert, require *td.T) {
+		for _, tc := range testCases {
+			assert.RunAssertRequire(tc.name, func(assert, require *td.T) {
+				r := tc.orig.HeaderAdd(http.Header{"foo": {"bar"}, "nil": nil})
+				resp, err := r(req)
+				require.CmpNoError(err)
+				assert.Cmp(resp.Header, http.Header{"Foo": {"bar"}, "Nil": nil})
+
+				r = r.HeaderAdd(http.Header{"foo": {"zip"}, "test": {"pipo"}})
+				resp, err = r(req)
+				require.CmpNoError(err)
+				assert.Cmp(resp.Header, http.Header{"Foo": {"bar", "zip"}, "Test": {"pipo"}, "Nil": clonedNil})
+			})
+		}
+
+		resp, err := orig(req)
+		require.CmpNoError(err)
+		assert.Empty(resp.Header)
+	})
+
+	assert.RunAssertRequire("HeaderSet", func(assert, require *td.T) {
+		for _, tc := range testCases {
+			assert.RunAssertRequire(tc.name, func(assert, require *td.T) {
+				r := tc.orig.HeaderSet(http.Header{"foo": {"bar"}, "nil": nil})
+				resp, err := r(req)
+				require.CmpNoError(err)
+				assert.Cmp(resp.Header, http.Header{"Foo": {"bar"}, "Nil": nil})
+
+				r = r.HeaderSet(http.Header{"foo": {"zip"}, "test": {"pipo"}})
+				resp, err = r(req)
+				require.CmpNoError(err)
+				assert.Cmp(resp.Header, http.Header{"Foo": {"zip"}, "Test": {"pipo"}, "Nil": clonedNil})
+			})
+		}
+
+		resp, err := orig(req)
+		require.CmpNoError(err)
+		assert.Empty(resp.Header)
+	})
+
+	assert.Run("error", func(assert *td.T) {
+		origErr := NewErrorResponder(errors.New("an error occurred"))
+
+		assert.Run("HeaderAdd", func(assert *td.T) {
+			r := origErr.HeaderAdd(http.Header{"foo": {"bar"}})
+			resp, err := r(req)
+			assert.Nil(resp)
+			assert.String(err, "an error occurred")
+		})
+
+		assert.Run("HeaderSet", func(assert *td.T) {
+			r := origErr.HeaderSet(http.Header{"foo": {"bar"}})
+			resp, err := r(req)
+			assert.Nil(resp)
+			assert.String(err, "an error occurred")
+		})
 	})
 }
 
