@@ -466,8 +466,8 @@ func (m matchRouteKey) String() string {
 }
 
 // bodyCopyOnRead copies body content to buf on first Read(), except
-// if body is nil. In this case, EOF is returned for each Read() and
-// buf stays to nil.
+// if body is nil or http.NoBody. In this case, EOF is returned for
+// each Read() and buf stays to nil.
 type bodyCopyOnRead struct {
 	body io.ReadCloser
 	buf  []byte
@@ -480,7 +480,7 @@ func (b *bodyCopyOnRead) rearm() {
 }
 
 func (b *bodyCopyOnRead) copy() {
-	if b.buf == nil && b.body != nil {
+	if b.buf == nil && b.body != nil && b.body != http.NoBody {
 		var body bytes.Buffer
 		io.Copy(&body, b.body) //nolint: errcheck
 		b.body.Close()
@@ -499,4 +499,10 @@ func (b *bodyCopyOnRead) Read(p []byte) (n int, err error) {
 
 func (b *bodyCopyOnRead) Close() error {
 	return nil
+}
+
+// Len returns the buffer total length, whatever the Read position in body is.
+func (b *bodyCopyOnRead) Len() int {
+	b.copy()
+	return len(b.buf)
 }
