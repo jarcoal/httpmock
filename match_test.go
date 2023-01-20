@@ -418,28 +418,71 @@ func TestBodyCopyOnRead(t *testing.T) {
 		td.CmpNoError(t, bc.Close())
 	})
 
-	t.Run("nil body", func(t *testing.T) {
-		bc := httpmock.NewBodyCopyOnRead(nil)
+	testCases := []struct {
+		name string
+		body io.ReadCloser
+	}{
+		{
+			name: "nil body",
+		},
+		{
+			name: "no body",
+			body: http.NoBody,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			bc := httpmock.NewBodyCopyOnRead(tc.body)
 
-		bc.Rearm()
-		td.CmpNil(t, bc.Buf())
+			bc.Rearm()
+			td.CmpNil(t, bc.Buf())
 
-		var buf [4]byte
-		n, err := bc.Read(buf[:])
-		td.Cmp(t, err, io.EOF)
-		td.Cmp(t, n, 0)
-		td.CmpNil(t, bc.Buf())
-		td.Cmp(t, bc.Body(), nil)
+			var buf [4]byte
+			n, err := bc.Read(buf[:])
+			td.Cmp(t, err, io.EOF)
+			td.Cmp(t, n, 0)
+			td.CmpNil(t, bc.Buf())
+			td.Cmp(t, bc.Body(), tc.body)
 
-		bc.Rearm()
+			bc.Rearm()
 
-		n, err = bc.Read(buf[:])
-		td.Cmp(t, err, io.EOF)
-		td.Cmp(t, n, 0)
-		td.CmpNil(t, bc.Buf())
-		td.Cmp(t, bc.Body(), nil)
+			n, err = bc.Read(buf[:])
+			td.Cmp(t, err, io.EOF)
+			td.Cmp(t, n, 0)
+			td.CmpNil(t, bc.Buf())
+			td.Cmp(t, bc.Body(), tc.body)
 
-		td.CmpNoError(t, bc.Close())
+			td.CmpNoError(t, bc.Close())
+		})
+	}
+
+	t.Run("len", func(t *testing.T) {
+		testCases := []struct {
+			name     string
+			bc       interface{ Len() int }
+			expected int
+		}{
+			{
+				name:     "nil",
+				bc:       httpmock.NewBodyCopyOnRead(nil),
+				expected: 0,
+			},
+			{
+				name:     "no body",
+				bc:       httpmock.NewBodyCopyOnRead(http.NoBody),
+				expected: 0,
+			},
+			{
+				name:     "filled",
+				bc:       httpmock.NewBodyCopyOnRead(ioutil.NopCloser(bytes.NewReader([]byte(`BODY`)))),
+				expected: 4,
+			},
+		}
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				td.Cmp(t, tc.bc.Len(), tc.expected)
+			})
+		}
 	})
 }
 

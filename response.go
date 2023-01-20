@@ -217,6 +217,153 @@ func (r Responder) Then(next Responder) (x Responder) {
 	return
 }
 
+// SetContentLength returns a new [Responder] based on r that ensures
+// the returned [*http.Response] ContentLength field and
+// Content-Length header are set to the right value.
+//
+// If r returns an [*http.Response] with a nil Body or equal to
+// [http.NoBody], the length is always set to 0.
+//
+// If r returned response.Body implements:
+//
+//	Len() int
+//
+// then the length is set to the Body.Len() returned value. All
+// httpmock generated bodies implement this method. Beware that
+// [strings.Builder], [strings.Reader], [bytes.Buffer] and
+// [bytes.Reader] types used with [io.NopCloser] do not implement
+// Len() anymore.
+//
+// Otherwise, r returned response.Body is entirely copied into an
+// internal buffer to get its length, then it is closed. The Body of
+// the [*http.Response] returned by the [Responder] returned by
+// SetContentLength can then be read again to return its content as
+// usual. But keep in mind that each time this [Responder] is called,
+// r is called first. So this one has to carefully handle its body: it
+// is highly recommended to use [NewRespBodyFromString] or
+// [NewRespBodyFromBytes] to set the body once (as
+// [NewStringResponder] and [NewBytesResponder] do behind the scene),
+// or to build the body each time r is called.
+//
+// The following calls are all correct:
+//
+//	responder = httpmock.NewStringResponder(200, "BODY").SetContentLength()
+//	responder = httpmock.NewBytesResponder(200, []byte("BODY")).SetContentLength()
+//	responder = ResponderFromResponse(&http.Response{
+//	  // build a body once, but httpmock knows how to "rearm" it once read
+//	  Body:          NewRespBodyFromString("BODY"),
+//	  StatusCode:    200,
+//	}).SetContentLength()
+//	responder = httpmock.Responder(func(req *http.Request) (*http.Response, error) {
+//	  // build a new body for each call
+//	  return &http.Response{
+//	    StatusCode: 200,
+//	    Body:       io.NopCloser(strings.NewReader("BODY")),
+//	  }, nil
+//	}).SetContentLength()
+//
+// But the following is not correct:
+//
+//	responder = httpmock.ResponderFromResponse(&http.Response{
+//	  StatusCode: 200,
+//	  Body:       io.NopCloser(strings.NewReader("BODY")),
+//	}).SetContentLength()
+//
+// it will only succeed for the first responder call. The following
+// calls will deliver responses with an empty body, as it will already
+// been read by the first call.
+func (r Responder) SetContentLength() Responder {
+	return func(req *http.Request) (*http.Response, error) {
+		resp, err := r(req)
+		if err != nil {
+			return nil, err
+		}
+		nr := *resp
+		switch nr.Body {
+		case nil:
+			nr.Body = http.NoBody
+			fallthrough
+		case http.NoBody:
+			nr.ContentLength = 0
+		default:
+			bl, ok := nr.Body.(interface{ Len() int })
+			if !ok {
+				copyBody := &dummyReadCloser{orig: nr.Body}
+				bl, nr.Body = copyBody, copyBody
+			}
+			nr.ContentLength = int64(bl.Len())
+		}
+		if nr.Header == nil {
+			nr.Header = http.Header{}
+		}
+		nr.Header = nr.Header.Clone()
+		nr.Header.Set("Content-Length", strconv.FormatInt(nr.ContentLength, 10))
+		return &nr, nil
+	}
+}
+
+// HeaderAdd returns a new [Responder] based on r that ensures the
+// returned [*http.Response] includes h header. It adds each h entry
+// to the header. It appends to any existing values associated with
+// each h key. Each key is case insensitive; it is canonicalized by
+// [http.CanonicalHeaderKey].
+//
+// See also [Responder.HeaderSet] and [Responder.SetContentLength].
+func (r Responder) HeaderAdd(h http.Header) Responder {
+	return func(req *http.Request) (*http.Response, error) {
+		resp, err := r(req)
+		if err != nil {
+			return nil, err
+		}
+		nr := *resp
+		if nr.Header == nil {
+			nr.Header = make(http.Header, len(h))
+		}
+		nr.Header = nr.Header.Clone()
+		for k, v := range h {
+			k = http.CanonicalHeaderKey(k)
+			if v == nil {
+				if _, ok := nr.Header[k]; !ok {
+					nr.Header[k] = nil
+				}
+				continue
+			}
+			nr.Header[k] = append(nr.Header[k], v...)
+		}
+		return &nr, nil
+	}
+}
+
+// HeaderSet returns a new [Responder] based on r that ensures the
+// returned [*http.Response] includes h header. It sets the header
+// entries associated with each h key. It replaces any existing values
+// associated each h key. Each key is case insensitive; it is
+// canonicalized by [http.CanonicalHeaderKey].
+//
+// See also [Responder.HeaderAdd] and [Responder.SetContentLength].
+func (r Responder) HeaderSet(h http.Header) Responder {
+	return func(req *http.Request) (*http.Response, error) {
+		resp, err := r(req)
+		if err != nil {
+			return nil, err
+		}
+		nr := *resp
+		if nr.Header == nil {
+			nr.Header = make(http.Header, len(h))
+		}
+		nr.Header = nr.Header.Clone()
+		for k, v := range h {
+			k = http.CanonicalHeaderKey(k)
+			if v == nil {
+				nr.Header[k] = nil
+				continue
+			}
+			nr.Header[k] = append([]string(nil), v...)
+		}
+		return &nr, nil
+	}
+}
+
 // ResponderFromResponse wraps an [*http.Response] in a [Responder].
 //
 // Be careful, except for responses generated by httpmock
@@ -560,9 +707,14 @@ func NewRespBodyFromBytes(body []byte) io.ReadCloser {
 	return &dummyReadCloser{orig: body}
 }
 
+type lenReadSeeker interface {
+	io.ReadSeeker
+	Len() int
+}
+
 type dummyReadCloser struct {
 	orig any           // string or []byte
-	body io.ReadSeeker // instanciated on demand from orig
+	body lenReadSeeker // instanciated on demand from orig
 }
 
 // copy returns a new instance resetting d.body to nil.
@@ -578,6 +730,11 @@ func (d *dummyReadCloser) setup() {
 			d.body = strings.NewReader(body)
 		case []byte:
 			d.body = bytes.NewReader(body)
+		case io.ReadCloser:
+			var buf bytes.Buffer
+			io.Copy(&buf, body) //nolint: errcheck
+			body.Close()
+			d.body = bytes.NewReader(buf.Bytes())
 		}
 	}
 }
@@ -591,4 +748,9 @@ func (d *dummyReadCloser) Close() error {
 	d.setup()
 	d.body.Seek(0, io.SeekEnd) // nolint: errcheck
 	return nil
+}
+
+func (d *dummyReadCloser) Len() int {
+	d.setup()
+	return d.body.Len()
 }
