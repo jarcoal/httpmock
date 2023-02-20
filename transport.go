@@ -49,8 +49,9 @@ func ConnectionFailure(*http.Request) (*http.Response, error) {
 // NewMockTransport creates a new [*MockTransport] with no responders.
 func NewMockTransport() *MockTransport {
 	return &MockTransport{
-		responders:    make(map[internal.RouteKey]matchResponders),
-		callCountInfo: make(map[matchRouteKey]int),
+		responders:       make(map[internal.RouteKey]matchResponders),
+		callCountInfo:    make(map[matchRouteKey]int),
+		allowedHostnames: []string{},
 	}
 }
 
@@ -77,6 +78,7 @@ type MockTransport struct {
 	noResponder      Responder
 	callCountInfo    map[matchRouteKey]int
 	totalCallCount   int
+	allowedHostnames []string
 }
 
 var findForKey = []func(*MockTransport, internal.RouteKey) respondersFound{
@@ -239,11 +241,29 @@ func (m *MockTransport) suggestResponder(method string, url *url.URL) *internal.
 	return nil
 }
 
+func (m *MockTransport) Allow(hostname string) {
+	m.allowedHostnames = append(m.allowedHostnames, hostname)
+}
+
+func (m *MockTransport) allowedHostname(hostname string) bool {
+	hostnameWithoutPort := strings.Split(hostname, ":")[0]
+	for _, hostname := range m.allowedHostnames {
+		if hostname == hostnameWithoutPort {
+			return true
+		}
+	}
+
+	return false
+}
+
 // RoundTrip receives HTTP requests and routes them to the appropriate
 // responder.  It is required to implement the [http.RoundTripper]
 // interface.  You will not interact with this directly, instead the
 // [*http.Client] you are using will call it for you.
 func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if m.allowedHostname(req.Host) {
+		return InitialTransport.RoundTrip(req)
+	}
 	method := req.Method
 	if method == "" {
 		// http.Request.Method is documented to default to GET:
@@ -1177,6 +1197,10 @@ func GetCallCountInfo() map[string]int {
 // since it was activated or reset.
 func GetTotalCallCount() int {
 	return DefaultTransport.GetTotalCallCount()
+}
+
+func Allow(hostname string) {
+	DefaultTransport.Allow(hostname)
 }
 
 // Deactivate shuts down the mock environment.  Any HTTP calls made
