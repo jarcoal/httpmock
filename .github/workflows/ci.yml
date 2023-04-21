@@ -32,10 +32,13 @@ jobs:
         if: matrix.full-tests
         run: |
           curl -sL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh |
-              sh -s -- -b $HOME/go/bin v1.51.0
+              sh -s -- -b $HOME/go/bin v1.52.2
           $HOME/go/bin/golangci-lint run --max-issues-per-linter 0 \
                                          --max-same-issues 0 \
+                                         --exclude="unused-parameter: parameter '[^']+' seems to be unused, consider removing or renaming it as _" \
+                                         -E asciicheck \
                                          -E bidichk \
+                                         -E durationcheck \
                                          -E exportloopref \
                                          -E gocritic \
                                          -E godot \
