@@ -38,10 +38,6 @@ func (b *bodyCopyOnRead) Body() io.ReadCloser {
 	return b.body
 }
 
-func (b *bodyCopyOnRead) Buf() []byte {
-	return b.buf
-}
-
 func (b *bodyCopyOnRead) Rearm() {
 	b.rearm()
 }
