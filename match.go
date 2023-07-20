@@ -106,6 +106,7 @@ type MatcherFunc func(req *http.Request) bool
 func matcherFuncOr(mfs []MatcherFunc) MatcherFunc {
 	return func(req *http.Request) bool {
 		for _, mf := range mfs {
+			rearmBody(req)
 			if mf(req) {
 				return true
 			}
@@ -120,6 +121,7 @@ func matcherFuncAnd(mfs []MatcherFunc) MatcherFunc {
 	}
 	return func(req *http.Request) bool {
 		for _, mf := range mfs {
+			rearmBody(req)
 			if !mf(req) {
 				return false
 			}
@@ -224,6 +226,7 @@ func NewMatcher(name string, fn MatcherFunc) Matcher {
 func BodyContainsBytes(subslice []byte) Matcher {
 	return NewMatcher("",
 		func(req *http.Request) bool {
+			rearmBody(req)
 			b, err := ioutil.ReadAll(req.Body)
 			return err == nil && bytes.Contains(b, subslice)
 		})
@@ -243,6 +246,7 @@ func BodyContainsBytes(subslice []byte) Matcher {
 func BodyContainsString(substr string) Matcher {
 	return NewMatcher("",
 		func(req *http.Request) bool {
+			rearmBody(req)
 			b, err := ioutil.ReadAll(req.Body)
 			return err == nil && bytes.Contains(b, []byte(substr))
 		})
@@ -465,27 +469,40 @@ func (m matchRouteKey) String() string {
 	return m.RouteKey.String() + " <" + m.name + ">"
 }
 
-// bodyCopyOnRead copies body content to buf on first Read(), except
+func rearmBody(req *http.Request) {
+	if req != nil {
+		if body, ok := req.Body.(interface{ rearm() }); ok {
+			body.rearm()
+		}
+	}
+}
+
+type buffer struct {
+	*bytes.Reader
+}
+
+func (b buffer) Close() error {
+	return nil
+}
+
+// bodyCopyOnRead mutates body into a buffer on first Read(), except
 // if body is nil or http.NoBody. In this case, EOF is returned for
-// each Read() and buf stays to nil.
+// each Read() and body stays untouched.
 type bodyCopyOnRead struct {
 	body io.ReadCloser
-	buf  []byte
 }
 
 func (b *bodyCopyOnRead) rearm() {
-	if b.buf != nil {
-		b.body = ioutil.NopCloser(bytes.NewReader(b.buf))
+	if buf, ok := b.body.(buffer); ok {
+		buf.Seek(0, io.SeekStart) //nolint:errcheck
 	} // else b.body contains the original body, so don't touch
 }
 
 func (b *bodyCopyOnRead) copy() {
-	if b.buf == nil && b.body != nil && b.body != http.NoBody {
-		var body bytes.Buffer
-		io.Copy(&body, b.body) //nolint: errcheck
+	if _, ok := b.body.(buffer); !ok && b.body != nil && b.body != http.NoBody {
+		buf, _ := ioutil.ReadAll(b.body)
 		b.body.Close()
-		b.buf = body.Bytes()
-		b.body = ioutil.NopCloser(bytes.NewReader(b.buf))
+		b.body = buffer{bytes.NewReader(buf)}
 	}
 }
 
@@ -499,10 +516,4 @@ func (b *bodyCopyOnRead) Read(p []byte) (n int, err error) {
 
 func (b *bodyCopyOnRead) Close() error {
 	return nil
-}
-
-// Len returns the buffer total length, whatever the Read position in body is.
-func (b *bodyCopyOnRead) Len() int {
-	b.copy()
-	return len(b.buf)
 }

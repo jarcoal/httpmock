@@ -123,6 +123,12 @@ func TestRegisterMatcherResponder(t *testing.T) {
 			}),
 		NewStringResponder(200, "body-FOO"))
 
+	RegisterMatcherResponder("POST", "/foo",
+		BodyContainsString("xxx").
+			Or(BodyContainsString("yyy")).
+			WithName("03-body-xxx|yyy"),
+		NewStringResponder(200, "body-xxx|yyy"))
+
 	RegisterResponder("POST", "/foo", NewStringResponder(200, "default"))
 
 	RegisterNoResponder(NewNotFoundResponder(nil))
@@ -155,6 +161,16 @@ func TestRegisterMatcherResponder(t *testing.T) {
 			name:         "body FOO",
 			body:         "FOO",
 			expectedBody: "body-FOO",
+		},
+		{
+			name:         "body xxx",
+			body:         "...xxx...",
+			expectedBody: "body-xxx|yyy",
+		},
+		{
+			name:         "body yyy",
+			body:         "...yyy...",
+			expectedBody: "body-xxx|yyy",
 		},
 		{
 			name:         "default",
@@ -194,12 +210,13 @@ func TestRegisterMatcherResponder(t *testing.T) {
 			"text/plain",
 			strings.NewReader("ANYTHING"),
 		)
-		assert.HasSuffix(err, `Responder not found for POST http://test.com/foo despite 3 matchers: ["00-header-foo=bar" "01-body-BAR" "02-body-FOO"]`)
+		assert.HasSuffix(err, `Responder not found for POST http://test.com/foo despite 4 matchers: ["00-header-foo=bar" "01-body-BAR" "02-body-FOO" "03-body-xxx|yyy"]`)
 	})
 
-	// Remove 2 matcher responders
+	// Remove 3 matcher responders
 	RegisterMatcherResponder("POST", "/foo", NewMatcher("01-body-BAR", nil), nil)
 	RegisterMatcherResponder("POST", "/foo", NewMatcher("02-body-FOO", nil), nil)
+	RegisterMatcherResponder("POST", "/foo", NewMatcher("03-body-xxx|yyy", nil), nil)
 
 	assert.Run("not found despite 1", func(assert *td.T) {
 		_, err := http.Post(

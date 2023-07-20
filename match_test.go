@@ -84,11 +84,20 @@ func TestNewMatcher(t *testing.T) {
 		return req
 	}
 
+	reqCopyBody := func(t testing.TB, body string, header ...string) *http.Request {
+		req := req(t, body, header...)
+		req.Body = httpmock.NewBodyCopyOnRead(req.Body)
+		return req
+	}
+
 	t.Run("BodyContainsBytes", func(t *testing.T) {
 		m := httpmock.BodyContainsBytes([]byte("ip"))
 		td.Cmp(t, m.Name(), autogenName)
 		td.CmpTrue(t, m.Check(req(t, "pipo")))
 		td.CmpFalse(t, m.Check(req(t, "bingo")))
+
+		td.CmpTrue(t, m.Check(reqCopyBody(t, "pipo")))
+		td.CmpFalse(t, m.Check(reqCopyBody(t, "bingo")))
 	})
 
 	t.Run("BodyContainsString", func(t *testing.T) {
@@ -96,6 +105,9 @@ func TestNewMatcher(t *testing.T) {
 		td.Cmp(t, m.Name(), autogenName)
 		td.CmpTrue(t, m.Check(req(t, "pipo")))
 		td.CmpFalse(t, m.Check(req(t, "bingo")))
+
+		td.CmpTrue(t, m.Check(reqCopyBody(t, "pipo")))
+		td.CmpFalse(t, m.Check(reqCopyBody(t, "bingo")))
 	})
 
 	t.Run("HeaderExists", func(t *testing.T) {
@@ -394,7 +406,7 @@ func TestBodyCopyOnRead(t *testing.T) {
 		bc := httpmock.NewBodyCopyOnRead(body)
 
 		bc.Rearm()
-		td.CmpNil(t, bc.Buf())
+		td.Cmp(t, body, bc.Body(), "rearm didn't touch anything")
 
 		var buf [4]byte
 		n, err := bc.Read(buf[:])
@@ -402,7 +414,9 @@ func TestBodyCopyOnRead(t *testing.T) {
 		td.Cmp(t, n, 4)
 		td.CmpString(t, buf[:], "BODY")
 
-		td.CmpString(t, bc.Buf(), "BODY", "Original body has been copied internally")
+		td.Cmp(t, body, td.Not(bc.Body()), "Original body has been copied internally")
+
+		td.CmpNoError(t, bc.Body().Close()) // for coverage... :)
 
 		n, err = bc.Read(buf[:])
 		td.Cmp(t, err, io.EOF)
@@ -435,55 +449,24 @@ func TestBodyCopyOnRead(t *testing.T) {
 			bc := httpmock.NewBodyCopyOnRead(tc.body)
 
 			bc.Rearm()
-			td.CmpNil(t, bc.Buf())
+			td.Cmp(t, tc.body, bc.Body(), "rearm didn't touch anything")
 
 			var buf [4]byte
 			n, err := bc.Read(buf[:])
 			td.Cmp(t, err, io.EOF)
 			td.Cmp(t, n, 0)
-			td.CmpNil(t, bc.Buf())
-			td.Cmp(t, bc.Body(), tc.body)
+			td.Cmp(t, bc.Body(), tc.body, "body is not altered")
 
 			bc.Rearm()
 
 			n, err = bc.Read(buf[:])
 			td.Cmp(t, err, io.EOF)
 			td.Cmp(t, n, 0)
-			td.CmpNil(t, bc.Buf())
-			td.Cmp(t, bc.Body(), tc.body)
+			td.Cmp(t, bc.Body(), tc.body, "body is not altered")
 
 			td.CmpNoError(t, bc.Close())
 		})
 	}
-
-	t.Run("len", func(t *testing.T) {
-		testCases := []struct {
-			name     string
-			bc       interface{ Len() int }
-			expected int
-		}{
-			{
-				name:     "nil",
-				bc:       httpmock.NewBodyCopyOnRead(nil),
-				expected: 0,
-			},
-			{
-				name:     "no body",
-				bc:       httpmock.NewBodyCopyOnRead(http.NoBody),
-				expected: 0,
-			},
-			{
-				name:     "filled",
-				bc:       httpmock.NewBodyCopyOnRead(ioutil.NopCloser(bytes.NewReader([]byte(`BODY`)))),
-				expected: 4,
-			},
-		}
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				td.Cmp(t, tc.bc.Len(), tc.expected)
-			})
-		}
-	})
 }
 
 func TestExtractPackage(t *testing.T) {
