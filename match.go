@@ -136,7 +136,7 @@ func (mf MatcherFunc) Check(req *http.Request) bool {
 }
 
 // Or combines mf and all mfs in a new [MatcherFunc]. This new
-// [MatcherFunc] succeeds if one of mf or mfs succeeds. Note that as a
+// [MatcherFunc] succeeds if one of mf or mfs succeeds. Note that as
 // a nil [MatcherFunc] is considered succeeding, if mf or one of mfs
 // items is nil, nil is returned.
 func (mf MatcherFunc) Or(mfs ...MatcherFunc) MatcherFunc {
