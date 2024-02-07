@@ -17,21 +17,21 @@ import (
 
 	"github.com/maxatome/go-testdeep/td"
 
-	. "github.com/jarcoal/httpmock"
+	"github.com/jarcoal/httpmock"
 	"github.com/jarcoal/httpmock/internal"
 )
 
 const testURL = "http://www.example.com/"
 
 func TestMockTransport(t *testing.T) {
-	Activate()
-	defer Deactivate()
+	httpmock.Activate()
+	defer httpmock.Deactivate()
 
 	url := "https://github.com/foo/bar"
 	body := `["hello world"]` + "\n"
 
-	RegisterResponder("GET", url, NewStringResponder(200, body))
-	RegisterResponder("GET", `=~/xxx\z`, NewStringResponder(200, body))
+	httpmock.RegisterResponder("GET", url, httpmock.NewStringResponder(200, body))
+	httpmock.RegisterResponder("GET", `=~/xxx\z`, httpmock.NewStringResponder(200, body))
 
 	assert := td.Assert(t)
 
@@ -44,7 +44,7 @@ func TestMockTransport(t *testing.T) {
 
 		// the http client wraps our NoResponderFound error, so we just try and match on text
 		_, err = http.Get(testURL)
-		assert.HasSuffix(err, NoResponderFound.Error())
+		assert.HasSuffix(err, httpmock.NoResponderFound.Error())
 
 		// Use wrongly cased method, the error should warn us
 		req, err := http.NewRequest("Get", url, nil)
@@ -52,29 +52,29 @@ func TestMockTransport(t *testing.T) {
 
 		c := http.Client{}
 		_, err = c.Do(req)
-		assert.HasSuffix(err, NoResponderFound.Error()+` for method "Get", but one matches method "GET"`)
+		assert.HasSuffix(err, httpmock.NoResponderFound.Error()+` for method "Get", but one matches method "GET"`)
 
 		// Use POST instead of GET, the error should warn us
 		req, err = http.NewRequest("POST", url, nil)
 		require.CmpNoError(err)
 
 		_, err = c.Do(req)
-		assert.HasSuffix(err, NoResponderFound.Error()+` for method "POST", but one matches method "GET"`)
+		assert.HasSuffix(err, httpmock.NoResponderFound.Error()+` for method "POST", but one matches method "GET"`)
 
 		// Same using a regexp responder
 		req, err = http.NewRequest("POST", "http://pipo.com/xxx", nil)
 		require.CmpNoError(err)
 
 		_, err = c.Do(req)
-		assert.HasSuffix(err, NoResponderFound.Error()+` for method "POST", but one matches method "GET"`)
+		assert.HasSuffix(err, httpmock.NoResponderFound.Error()+` for method "POST", but one matches method "GET"`)
 
 		// Use a URL with squashable "/" in path
 		_, err = http.Get("https://github.com////foo//bar")
-		assert.HasSuffix(err, NoResponderFound.Error()+` for URL "https://github.com////foo//bar", but one matches URL "https://github.com/foo/bar"`)
+		assert.HasSuffix(err, httpmock.NoResponderFound.Error()+` for URL "https://github.com////foo//bar", but one matches URL "https://github.com/foo/bar"`)
 
 		// Use a URL terminated by "/"
 		_, err = http.Get("https://github.com/foo/bar/")
-		assert.HasSuffix(err, NoResponderFound.Error()+` for URL "https://github.com/foo/bar/", but one matches URL "https://github.com/foo/bar"`)
+		assert.HasSuffix(err, httpmock.NoResponderFound.Error()+` for URL "https://github.com/foo/bar/", but one matches URL "https://github.com/foo/bar"`)
 	})
 
 	// Do it again, but twice with json decoder (json Decode will not
@@ -95,43 +95,43 @@ func TestMockTransport(t *testing.T) {
 }
 
 func TestRegisterMatcherResponder(t *testing.T) {
-	Activate()
-	defer DeactivateAndReset()
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
 
-	RegisterMatcherResponder("POST", "/foo",
-		NewMatcher(
+	httpmock.RegisterMatcherResponder("POST", "/foo",
+		httpmock.NewMatcher(
 			"00-header-foo=bar",
 			func(r *http.Request) bool { return r.Header.Get("Foo") == "bar" },
 		),
-		NewStringResponder(200, "header-foo"))
+		httpmock.NewStringResponder(200, "header-foo"))
 
-	RegisterMatcherResponder("POST", "/foo",
-		NewMatcher(
+	httpmock.RegisterMatcherResponder("POST", "/foo",
+		httpmock.NewMatcher(
 			"01-body-BAR",
 			func(r *http.Request) bool {
 				b, err := ioutil.ReadAll(r.Body)
 				return err == nil && bytes.Contains(b, []byte("BAR"))
 			}),
-		NewStringResponder(200, "body-BAR"))
+		httpmock.NewStringResponder(200, "body-BAR"))
 
-	RegisterMatcherResponder("POST", "/foo",
-		NewMatcher(
+	httpmock.RegisterMatcherResponder("POST", "/foo",
+		httpmock.NewMatcher(
 			"02-body-FOO",
 			func(r *http.Request) bool {
 				b, err := ioutil.ReadAll(r.Body)
 				return err == nil && bytes.Contains(b, []byte("FOO"))
 			}),
-		NewStringResponder(200, "body-FOO"))
+		httpmock.NewStringResponder(200, "body-FOO"))
 
-	RegisterMatcherResponder("POST", "/foo",
-		BodyContainsString("xxx").
-			Or(BodyContainsString("yyy")).
+	httpmock.RegisterMatcherResponder("POST", "/foo",
+		httpmock.BodyContainsString("xxx").
+			Or(httpmock.BodyContainsString("yyy")).
 			WithName("03-body-xxx|yyy"),
-		NewStringResponder(200, "body-xxx|yyy"))
+		httpmock.NewStringResponder(200, "body-xxx|yyy"))
 
-	RegisterResponder("POST", "/foo", NewStringResponder(200, "default"))
+	httpmock.RegisterResponder("POST", "/foo", httpmock.NewStringResponder(200, "default"))
 
-	RegisterNoResponder(NewNotFoundResponder(nil))
+	httpmock.RegisterNoResponder(httpmock.NewNotFoundResponder(nil))
 
 	testCases := []struct {
 		name         string
@@ -202,7 +202,7 @@ func TestRegisterMatcherResponder(t *testing.T) {
 	}
 
 	// Remove the default responder
-	RegisterResponder("POST", "/foo", nil)
+	httpmock.RegisterResponder("POST", "/foo", nil)
 
 	assert.Run("not found despite 3", func(assert *td.T) {
 		_, err := http.Post(
@@ -214,9 +214,9 @@ func TestRegisterMatcherResponder(t *testing.T) {
 	})
 
 	// Remove 3 matcher responders
-	RegisterMatcherResponder("POST", "/foo", NewMatcher("01-body-BAR", nil), nil)
-	RegisterMatcherResponder("POST", "/foo", NewMatcher("02-body-FOO", nil), nil)
-	RegisterMatcherResponder("POST", "/foo", NewMatcher("03-body-xxx|yyy", nil), nil)
+	httpmock.RegisterMatcherResponder("POST", "/foo", httpmock.NewMatcher("01-body-BAR", nil), nil)
+	httpmock.RegisterMatcherResponder("POST", "/foo", httpmock.NewMatcher("02-body-FOO", nil), nil)
+	httpmock.RegisterMatcherResponder("POST", "/foo", httpmock.NewMatcher("03-body-xxx|yyy", nil), nil)
 
 	assert.Run("not found despite 1", func(assert *td.T) {
 		_, err := http.Post(
@@ -230,7 +230,7 @@ func TestRegisterMatcherResponder(t *testing.T) {
 	// Add a regexp responder without a Matcher: as the exact match
 	// didn't succeed because of the "00-header-foo=bar" Matcher, the
 	// following one must be tried ans also succeed
-	RegisterResponder("POST", "=~^/foo", NewStringResponder(200, "regexp"))
+	httpmock.RegisterResponder("POST", "=~^/foo", httpmock.NewStringResponder(200, "regexp"))
 
 	assert.RunAssertRequire("default regexp", func(assert, require *td.T) {
 		resp, err := http.Post(
@@ -246,12 +246,12 @@ func TestRegisterMatcherResponder(t *testing.T) {
 	})
 
 	// Remove the previous regexp responder
-	RegisterResponder("POST", "=~^/foo", nil)
+	httpmock.RegisterResponder("POST", "=~^/foo", nil)
 
 	// Add a regexp Matcher responder that should match ZIP body
-	RegisterMatcherResponder("POST", "=~^/foo",
-		BodyContainsString("ZIP").WithName("10-body-ZIP"),
-		NewStringResponder(200, "body-ZIP"))
+	httpmock.RegisterMatcherResponder("POST", "=~^/foo",
+		httpmock.BodyContainsString("ZIP").WithName("10-body-ZIP"),
+		httpmock.NewStringResponder(200, "body-ZIP"))
 
 	assert.RunAssertRequire("regexp matcher OK", func(assert, require *td.T) {
 		resp, err := http.Post(
@@ -286,15 +286,15 @@ func TestRegisterMatcherResponder(t *testing.T) {
 func TestMockTransportDefaultMethod(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
-	Activate()
-	defer Deactivate()
+	httpmock.Activate()
+	defer httpmock.Deactivate()
 
 	const urlString = "https://github.com/"
 	url, err := url.Parse(urlString)
 	require.CmpNoError(err)
 	body := "hello world"
 
-	RegisterResponder("GET", urlString, NewStringResponder(200, body))
+	httpmock.RegisterResponder("GET", urlString, httpmock.NewStringResponder(200, body))
 
 	req := &http.Request{
 		URL: url,
@@ -309,24 +309,24 @@ func TestMockTransportDefaultMethod(t *testing.T) {
 }
 
 func TestMockTransportReset(t *testing.T) {
-	DeactivateAndReset()
+	httpmock.DeactivateAndReset()
 
-	td.CmpZero(t, DefaultTransport.NumResponders(),
+	td.CmpZero(t, httpmock.DefaultTransport.NumResponders(),
 		"expected no responders at this point")
-	td.Cmp(t, DefaultTransport.Responders(), []string{})
+	td.Cmp(t, httpmock.DefaultTransport.Responders(), []string{})
 
-	r := NewStringResponder(200, "hey")
+	r := httpmock.NewStringResponder(200, "hey")
 
-	RegisterResponder("GET", testURL, r)
-	RegisterResponder("POST", testURL, r)
-	RegisterResponder("PATCH", testURL, r)
-	RegisterResponder("GET", "/pipo/bingo", r)
+	httpmock.RegisterResponder("GET", testURL, r)
+	httpmock.RegisterResponder("POST", testURL, r)
+	httpmock.RegisterResponder("PATCH", testURL, r)
+	httpmock.RegisterResponder("GET", "/pipo/bingo", r)
 
-	RegisterResponder("GET", "=~/pipo/bingo", r)
-	RegisterResponder("GET", "=~/bingo/pipo", r)
+	httpmock.RegisterResponder("GET", "=~/pipo/bingo", r)
+	httpmock.RegisterResponder("GET", "=~/bingo/pipo", r)
 
-	td.Cmp(t, DefaultTransport.NumResponders(), 6, "expected one responder")
-	td.Cmp(t, DefaultTransport.Responders(), []string{
+	td.Cmp(t, httpmock.DefaultTransport.NumResponders(), 6, "expected one responder")
+	td.Cmp(t, httpmock.DefaultTransport.Responders(), []string{
 		// Sorted by URL then method
 		"GET /pipo/bingo",
 		"GET " + testURL,
@@ -337,23 +337,23 @@ func TestMockTransportReset(t *testing.T) {
 		"GET =~/bingo/pipo",
 	})
 
-	Reset()
+	httpmock.Reset()
 
-	td.CmpZero(t, DefaultTransport.NumResponders(),
+	td.CmpZero(t, httpmock.DefaultTransport.NumResponders(),
 		"expected no responders as they were just reset")
-	td.Cmp(t, DefaultTransport.Responders(), []string{})
+	td.Cmp(t, httpmock.DefaultTransport.Responders(), []string{})
 }
 
 func TestMockTransportNoResponder(t *testing.T) {
-	Activate()
-	defer DeactivateAndReset()
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
 
-	Reset()
+	httpmock.Reset()
 
 	_, err := http.Get(testURL)
 	td.CmpError(t, err, "expected to receive a connection error due to lack of responders")
 
-	RegisterNoResponder(NewStringResponder(200, "hello world"))
+	httpmock.RegisterNoResponder(httpmock.NewStringResponder(200, "hello world"))
 
 	resp, err := http.Get(testURL)
 	if td.CmpNoError(t, err, "expected request to succeed") {
@@ -361,12 +361,12 @@ func TestMockTransportNoResponder(t *testing.T) {
 	}
 
 	// Using NewNotFoundResponder()
-	RegisterNoResponder(NewNotFoundResponder(nil))
+	httpmock.RegisterNoResponder(httpmock.NewNotFoundResponder(nil))
 	_, err = http.Get(testURL)
 	td.CmpHasSuffix(t, err, "Responder not found for GET http://www.example.com/")
 
 	const url = "http://www.example.com/foo/bar"
-	RegisterResponder("POST", url, NewStringResponder(200, "hello world"))
+	httpmock.RegisterResponder("POST", url, httpmock.NewStringResponder(200, "hello world"))
 
 	// Help the user in case a Responder exists for another method
 	_, err = http.Get(url)
@@ -384,11 +384,11 @@ func TestMockTransportNoResponder(t *testing.T) {
 func TestMockTransportQuerystringFallback(t *testing.T) {
 	assert := td.Assert(t)
 
-	Activate()
-	defer DeactivateAndReset()
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
 
 	// register the testURL responder
-	RegisterResponder("GET", testURL, NewStringResponder(200, "hello world"))
+	httpmock.RegisterResponder("GET", testURL, httpmock.NewStringResponder(200, "hello world"))
 
 	for _, suffix := range []string{"?", "?hello=world", "?hello=world#foo", "?hello=world&hello=all", "#foo"} {
 		assert.RunAssertRequire(suffix, func(assert, require *td.T) {
@@ -405,7 +405,7 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 
 func TestMockTransportPathOnlyFallback(t *testing.T) {
 	// Just in case a panic occurs
-	defer DeactivateAndReset()
+	defer httpmock.DeactivateAndReset()
 
 	for _, test := range []struct {
 		Responder string
@@ -548,10 +548,10 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 			},
 		},
 	} {
-		Activate()
+		httpmock.Activate()
 
 		// register the responder
-		RegisterResponder("GET", test.Responder, NewStringResponder(200, "hello world"))
+		httpmock.RegisterResponder("GET", test.Responder, httpmock.NewStringResponder(200, "hello world"))
 
 		for _, reqURL := range test.Paths {
 			t.Logf("%s: %s", test.Responder, reqURL)
@@ -563,7 +563,7 @@ func TestMockTransportPathOnlyFallback(t *testing.T) {
 			}
 		}
 
-		DeactivateAndReset()
+		httpmock.DeactivateAndReset()
 	}
 }
 
@@ -574,17 +574,17 @@ func (d *dummyTripper) RoundTrip(*http.Request) (*http.Response, error) {
 }
 
 func TestMockTransportInitialTransport(t *testing.T) {
-	DeactivateAndReset()
+	httpmock.DeactivateAndReset()
 
 	tripper := &dummyTripper{}
 	http.DefaultTransport = tripper
 
-	Activate()
+	httpmock.Activate()
 
 	td.CmpNot(t, http.DefaultTransport, td.Shallow(tripper),
 		"expected http.DefaultTransport to be a mock transport")
 
-	Deactivate()
+	httpmock.Deactivate()
 
 	td.Cmp(t, http.DefaultTransport, td.Shallow(tripper),
 		"expected http.DefaultTransport to be dummy")
@@ -606,12 +606,12 @@ func TestMockTransportNonDefault(t *testing.T) {
 	}
 
 	// activate mocks for the client
-	ActivateNonDefault(client)
-	defer DeactivateAndReset()
+	httpmock.ActivateNonDefault(client)
+	defer httpmock.DeactivateAndReset()
 
 	body := "hello world!"
 
-	RegisterResponder("GET", testURL, NewStringResponder(200, body))
+	httpmock.RegisterResponder("GET", testURL, httpmock.NewStringResponder(200, body))
 
 	req, err := http.NewRequest("GET", testURL, nil)
 	require.CmpNoError(err)
@@ -625,8 +625,8 @@ func TestMockTransportNonDefault(t *testing.T) {
 func TestMockTransportRespectsCancel(t *testing.T) {
 	assert := td.Assert(t)
 
-	Activate()
-	defer DeactivateAndReset()
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
 
 	const (
 		cancelNone = iota
@@ -665,16 +665,16 @@ func TestMockTransportRespectsCancel(t *testing.T) {
 
 	for ic, c := range cases {
 		assert.RunAssertRequire(fmt.Sprintf("case #%d", ic), func(assert, require *td.T) {
-			Reset()
+			httpmock.Reset()
 			if c.withPanic {
-				RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
+				httpmock.RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
 					time.Sleep(10 * time.Millisecond)
 					panic("oh no")
 				})
 			} else {
-				RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
+				httpmock.RegisterResponder("GET", testURL, func(r *http.Request) (*http.Response, error) {
 					time.Sleep(10 * time.Millisecond)
-					return NewStringResponse(http.StatusOK, "hello world"), nil
+					return httpmock.NewStringResponse(http.StatusOK, "hello world"), nil
 				})
 			}
 
@@ -720,14 +720,14 @@ func TestMockTransportRespectsTimeout(t *testing.T) {
 		Timeout: timeout,
 	}
 
-	ActivateNonDefault(client)
-	defer DeactivateAndReset()
+	httpmock.ActivateNonDefault(client)
+	defer httpmock.DeactivateAndReset()
 
-	RegisterResponder(
+	httpmock.RegisterResponder(
 		"GET", testURL,
 		func(r *http.Request) (*http.Response, error) {
 			time.Sleep(100 * timeout)
-			return NewStringResponse(http.StatusOK, ""), nil
+			return httpmock.NewStringResponse(http.StatusOK, ""), nil
 		},
 	)
 
@@ -738,20 +738,20 @@ func TestMockTransportRespectsTimeout(t *testing.T) {
 func TestMockTransportCallCountReset(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
-	Reset()
-	Activate()
-	defer Deactivate()
+	httpmock.Reset()
+	httpmock.Activate()
+	defer httpmock.Deactivate()
 
 	const (
 		url  = "https://github.com/path?b=1&a=2"
 		url2 = "https://gitlab.com/"
 	)
 
-	RegisterResponder("GET", url, NewStringResponder(200, "body"))
-	RegisterResponder("POST", "=~gitlab", NewStringResponder(200, "body"))
-	RegisterMatcherResponder("POST", "=~gitlab",
-		BodyContainsString("pipo").WithName("pipo-in-body"),
-		NewStringResponder(200, "body"))
+	httpmock.RegisterResponder("GET", url, httpmock.NewStringResponder(200, "body"))
+	httpmock.RegisterResponder("POST", "=~gitlab", httpmock.NewStringResponder(200, "body"))
+	httpmock.RegisterMatcherResponder("POST", "=~gitlab",
+		httpmock.BodyContainsString("pipo").WithName("pipo-in-body"),
+		httpmock.NewStringResponder(200, "body"))
 
 	_, err := http.Get(url)
 	require.CmpNoError(err)
@@ -769,8 +769,8 @@ func TestMockTransportCallCountReset(t *testing.T) {
 	_, err = http.Get(url)
 	require.CmpNoError(err)
 
-	assert.Cmp(GetTotalCallCount(), 2+1+1)
-	assert.Cmp(GetCallCountInfo(), map[string]int{
+	assert.Cmp(httpmock.GetTotalCallCount(), 2+1+1)
+	assert.Cmp(httpmock.GetCallCountInfo(), map[string]int{
 		"GET " + url: 2,
 		// Regexp match generates 2 entries:
 		"POST " + url2:  1, // the matched call
@@ -780,29 +780,29 @@ func TestMockTransportCallCountReset(t *testing.T) {
 		"POST =~gitlab <pipo-in-body>":     1, // the regexp responder with matcher
 	})
 
-	Reset()
+	httpmock.Reset()
 
-	assert.Zero(GetTotalCallCount())
-	assert.Empty(GetCallCountInfo())
+	assert.Zero(httpmock.GetTotalCallCount())
+	assert.Empty(httpmock.GetCallCountInfo())
 }
 
 func TestMockTransportCallCountZero(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
-	Reset()
-	Activate()
-	defer Deactivate()
+	httpmock.Reset()
+	httpmock.Activate()
+	defer httpmock.Deactivate()
 
 	const (
 		url  = "https://github.com/path?b=1&a=2"
 		url2 = "https://gitlab.com/"
 	)
 
-	RegisterResponder("GET", url, NewStringResponder(200, "body"))
-	RegisterResponder("POST", "=~gitlab", NewStringResponder(200, "body"))
-	RegisterMatcherResponder("POST", "=~gitlab",
-		BodyContainsString("pipo").WithName("pipo-in-body"),
-		NewStringResponder(200, "body"))
+	httpmock.RegisterResponder("GET", url, httpmock.NewStringResponder(200, "body"))
+	httpmock.RegisterResponder("POST", "=~gitlab", httpmock.NewStringResponder(200, "body"))
+	httpmock.RegisterMatcherResponder("POST", "=~gitlab",
+		httpmock.BodyContainsString("pipo").WithName("pipo-in-body"),
+		httpmock.NewStringResponder(200, "body"))
 
 	_, err := http.Get(url)
 	require.CmpNoError(err)
@@ -820,8 +820,8 @@ func TestMockTransportCallCountZero(t *testing.T) {
 	_, err = http.Get(url)
 	require.CmpNoError(err)
 
-	assert.Cmp(GetTotalCallCount(), 2+1+1)
-	assert.Cmp(GetCallCountInfo(), map[string]int{
+	assert.Cmp(httpmock.GetTotalCallCount(), 2+1+1)
+	assert.Cmp(httpmock.GetCallCountInfo(), map[string]int{
 		"GET " + url: 2,
 		// Regexp match generates 2 entries:
 		"POST " + url2:  1, // the matched call
@@ -831,10 +831,10 @@ func TestMockTransportCallCountZero(t *testing.T) {
 		"POST =~gitlab <pipo-in-body>":     1, // the regexp responder with matcher
 	})
 
-	ZeroCallCounters()
+	httpmock.ZeroCallCounters()
 
-	assert.Zero(GetTotalCallCount())
-	assert.Cmp(GetCallCountInfo(), map[string]int{
+	assert.Zero(httpmock.GetTotalCallCount())
+	assert.Cmp(httpmock.GetCallCountInfo(), map[string]int{
 		"GET " + url: 0,
 		// Regexp match generates 2 entries:
 		"POST " + url2:  0, // the matched call
@@ -845,11 +845,11 @@ func TestMockTransportCallCountZero(t *testing.T) {
 	})
 
 	// Unregister each responder
-	RegisterResponder("GET", url, nil)
-	RegisterResponder("POST", "=~gitlab", nil)
-	RegisterMatcherResponder("POST", "=~gitlab", NewMatcher("pipo-in-body", nil), nil)
+	httpmock.RegisterResponder("GET", url, nil)
+	httpmock.RegisterResponder("POST", "=~gitlab", nil)
+	httpmock.RegisterMatcherResponder("POST", "=~gitlab", httpmock.NewMatcher("pipo-in-body", nil), nil)
 
-	assert.Cmp(GetCallCountInfo(), map[string]int{
+	assert.Cmp(httpmock.GetCallCountInfo(), map[string]int{
 		// these ones remain as they are not directly related to a
 		// registered responder but a consequence of a regexp match
 		"POST " + url2:                     0,
@@ -860,10 +860,10 @@ func TestMockTransportCallCountZero(t *testing.T) {
 func TestRegisterResponderWithQuery(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
-	Reset()
+	httpmock.Reset()
 
 	// Just in case a panic occurs
-	defer DeactivateAndReset()
+	defer httpmock.DeactivateAndReset()
 
 	// create a custom http client w/ custom Roundtripper
 	client := &http.Client{
@@ -921,8 +921,8 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 		},
 	} {
 		for _, query := range test.Queries {
-			ActivateNonDefault(client)
-			RegisterResponderWithQuery("GET", testURLPath, query, NewStringResponder(200, body))
+			httpmock.ActivateNonDefault(client)
+			httpmock.RegisterResponderWithQuery("GET", testURLPath, query, httpmock.NewStringResponder(200, body))
 
 			for _, url := range test.URLs {
 				assert.Logf("query=%v URL=%s", query, url)
@@ -936,13 +936,13 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 				assertBody(assert, resp, body)
 			}
 
-			if info := GetCallCountInfo(); len(info) != 1 {
+			if info := httpmock.GetCallCountInfo(); len(info) != 1 {
 				t.Fatalf("%s: len(GetCallCountInfo()) should be 1 but contains %+v", testURLPath, info)
 			}
 
 			// Remove...
-			RegisterResponderWithQuery("GET", testURLPath, query, nil)
-			require.Len(GetCallCountInfo(), 0)
+			httpmock.RegisterResponderWithQuery("GET", testURLPath, query, nil)
+			require.Len(httpmock.GetCallCountInfo(), 0)
 
 			for _, url := range test.URLs {
 				t.Logf("query=%v URL=%s", query, url)
@@ -954,13 +954,13 @@ func TestRegisterResponderWithQuery(t *testing.T) {
 				assert.HasSuffix(err, "no responder found")
 			}
 
-			DeactivateAndReset()
+			httpmock.DeactivateAndReset()
 		}
 	}
 }
 
 func TestRegisterResponderWithQueryPanic(t *testing.T) {
-	resp := NewStringResponder(200, "hello world!")
+	resp := httpmock.NewStringResponder(200, "hello world!")
 
 	for _, test := range []struct {
 		Path        string
@@ -984,33 +984,33 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 		},
 	} {
 		td.CmpPanic(t,
-			func() { RegisterResponderWithQuery("GET", test.Path, test.Query, resp) },
+			func() { httpmock.RegisterResponderWithQuery("GET", test.Path, test.Query, resp) },
 			td.HasPrefix(test.PanicPrefix),
 			`RegisterResponderWithQuery + query=%v`, test.Query)
 	}
 }
 
 func TestRegisterRegexpResponder(t *testing.T) {
-	Activate()
-	defer DeactivateAndReset()
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
 
 	rx := regexp.MustCompile("ex.mple")
 
-	RegisterRegexpResponder("POST", rx, NewStringResponder(200, "first"))
+	httpmock.RegisterRegexpResponder("POST", rx, httpmock.NewStringResponder(200, "first"))
 	// Overwrite responder
-	RegisterRegexpResponder("POST", rx, NewStringResponder(200, "second"))
+	httpmock.RegisterRegexpResponder("POST", rx, httpmock.NewStringResponder(200, "second"))
 
 	resp, err := http.Post(testURL, "text/plain", strings.NewReader("PIPO"))
 	td.Require(t).CmpNoError(err)
 	assertBody(t, resp, "second")
 
-	RegisterRegexpMatcherResponder("POST", rx,
-		BodyContainsString("PIPO").WithName("01-body-PIPO"),
-		NewStringResponder(200, "matcher-PIPO"))
+	httpmock.RegisterRegexpMatcherResponder("POST", rx,
+		httpmock.BodyContainsString("PIPO").WithName("01-body-PIPO"),
+		httpmock.NewStringResponder(200, "matcher-PIPO"))
 
-	RegisterRegexpMatcherResponder("POST", rx,
-		BodyContainsString("BINGO").WithName("02-body-BINGO"),
-		NewStringResponder(200, "matcher-BINGO"))
+	httpmock.RegisterRegexpMatcherResponder("POST", rx,
+		httpmock.BodyContainsString("BINGO").WithName("02-body-BINGO"),
+		httpmock.NewStringResponder(200, "matcher-BINGO"))
 
 	resp, err = http.Post(testURL, "text/plain", strings.NewReader("PIPO"))
 	td.Require(t).CmpNoError(err)
@@ -1021,7 +1021,7 @@ func TestRegisterRegexpResponder(t *testing.T) {
 	assertBody(t, resp, "matcher-BINGO")
 
 	// Remove 01-body-PIPO matcher
-	RegisterRegexpMatcherResponder("POST", rx, NewMatcher("01-body-PIPO", nil), nil)
+	httpmock.RegisterRegexpMatcherResponder("POST", rx, httpmock.NewMatcher("01-body-PIPO", nil), nil)
 
 	resp, err = http.Post(testURL, "text/plain", strings.NewReader("PIPO"))
 	td.Require(t).CmpNoError(err)
@@ -1032,7 +1032,7 @@ func TestRegisterRegexpResponder(t *testing.T) {
 	assertBody(t, resp, "matcher-BINGO")
 
 	// Remove 02-body-BINGO matcher
-	RegisterRegexpMatcherResponder("POST", rx, NewMatcher("02-body-BINGO", nil), nil)
+	httpmock.RegisterRegexpMatcherResponder("POST", rx, httpmock.NewMatcher("02-body-BINGO", nil), nil)
 
 	resp, err = http.Post(testURL, "text/plain", strings.NewReader("BINGO"))
 	td.Require(t).CmpNoError(err)
@@ -1048,69 +1048,69 @@ func TestSubmatches(t *testing.T) {
 	req2 := internal.SetSubmatches(req, []string{"foo", "123", "-123", "12.3"})
 
 	assert.Run("GetSubmatch", func(assert *td.T) {
-		_, err := GetSubmatch(req, 1)
-		assert.Cmp(err, ErrSubmatchNotFound)
+		_, err := httpmock.GetSubmatch(req, 1)
+		assert.Cmp(err, httpmock.ErrSubmatchNotFound)
 
-		_, err = GetSubmatch(req2, 5)
-		assert.Cmp(err, ErrSubmatchNotFound)
+		_, err = httpmock.GetSubmatch(req2, 5)
+		assert.Cmp(err, httpmock.ErrSubmatchNotFound)
 
-		s, err := GetSubmatch(req2, 1)
+		s, err := httpmock.GetSubmatch(req2, 1)
 		assert.CmpNoError(err)
 		assert.Cmp(s, "foo")
 
-		s, err = GetSubmatch(req2, 4)
+		s, err = httpmock.GetSubmatch(req2, 4)
 		assert.CmpNoError(err)
 		assert.Cmp(s, "12.3")
 
-		s = MustGetSubmatch(req2, 4)
+		s = httpmock.MustGetSubmatch(req2, 4)
 		assert.Cmp(s, "12.3")
 	})
 
 	assert.Run("GetSubmatchAsInt", func(assert *td.T) {
-		_, err := GetSubmatchAsInt(req, 1)
-		assert.Cmp(err, ErrSubmatchNotFound)
+		_, err := httpmock.GetSubmatchAsInt(req, 1)
+		assert.Cmp(err, httpmock.ErrSubmatchNotFound)
 
-		_, err = GetSubmatchAsInt(req2, 4) // not an int
+		_, err = httpmock.GetSubmatchAsInt(req2, 4) // not an int
 		assert.CmpError(err)
-		assert.Not(err, ErrSubmatchNotFound)
+		assert.Not(err, httpmock.ErrSubmatchNotFound)
 
-		i, err := GetSubmatchAsInt(req2, 3)
+		i, err := httpmock.GetSubmatchAsInt(req2, 3)
 		assert.CmpNoError(err)
 		assert.CmpLax(i, -123)
 
-		i = MustGetSubmatchAsInt(req2, 3)
+		i = httpmock.MustGetSubmatchAsInt(req2, 3)
 		assert.CmpLax(i, -123)
 	})
 
 	assert.Run("GetSubmatchAsUint", func(assert *td.T) {
-		_, err := GetSubmatchAsUint(req, 1)
-		assert.Cmp(err, ErrSubmatchNotFound)
+		_, err := httpmock.GetSubmatchAsUint(req, 1)
+		assert.Cmp(err, httpmock.ErrSubmatchNotFound)
 
-		_, err = GetSubmatchAsUint(req2, 3) // not a uint
+		_, err = httpmock.GetSubmatchAsUint(req2, 3) // not a uint
 		assert.CmpError(err)
-		assert.Not(err, ErrSubmatchNotFound)
+		assert.Not(err, httpmock.ErrSubmatchNotFound)
 
-		u, err := GetSubmatchAsUint(req2, 2)
+		u, err := httpmock.GetSubmatchAsUint(req2, 2)
 		assert.CmpNoError(err)
 		assert.CmpLax(u, 123)
 
-		u = MustGetSubmatchAsUint(req2, 2)
+		u = httpmock.MustGetSubmatchAsUint(req2, 2)
 		assert.CmpLax(u, 123)
 	})
 
 	assert.Run("GetSubmatchAsFloat", func(assert *td.T) {
-		_, err := GetSubmatchAsFloat(req, 1)
-		assert.Cmp(err, ErrSubmatchNotFound)
+		_, err := httpmock.GetSubmatchAsFloat(req, 1)
+		assert.Cmp(err, httpmock.ErrSubmatchNotFound)
 
-		_, err = GetSubmatchAsFloat(req2, 1) // not a float
+		_, err = httpmock.GetSubmatchAsFloat(req2, 1) // not a float
 		assert.CmpError(err)
-		assert.Not(err, ErrSubmatchNotFound)
+		assert.Not(err, httpmock.ErrSubmatchNotFound)
 
-		f, err := GetSubmatchAsFloat(req2, 4)
+		f, err := httpmock.GetSubmatchAsFloat(req2, 4)
 		assert.CmpNoError(err)
 		assert.Cmp(f, 12.3)
 
-		f = MustGetSubmatchAsFloat(req2, 4)
+		f = httpmock.MustGetSubmatchAsFloat(req2, 4)
 		assert.Cmp(f, 12.3)
 	})
 
@@ -1122,27 +1122,27 @@ func TestSubmatches(t *testing.T) {
 		}{
 			{
 				Name:        "GetSubmatch & n < 1",
-				Fn:          func() { GetSubmatch(req, 0) }, // nolint: errcheck
+				Fn:          func() { httpmock.GetSubmatch(req, 0) }, // nolint: errcheck
 				PanicPrefix: "getting submatches starts at 1, not 0",
 			},
 			{
 				Name:        "MustGetSubmatch",
-				Fn:          func() { MustGetSubmatch(req, 1) },
-				PanicPrefix: "GetSubmatch failed: " + ErrSubmatchNotFound.Error(),
+				Fn:          func() { httpmock.MustGetSubmatch(req, 1) },
+				PanicPrefix: "GetSubmatch failed: " + httpmock.ErrSubmatchNotFound.Error(),
 			},
 			{
 				Name:        "MustGetSubmatchAsInt",
-				Fn:          func() { MustGetSubmatchAsInt(req2, 4) }, // not an int
+				Fn:          func() { httpmock.MustGetSubmatchAsInt(req2, 4) }, // not an int
 				PanicPrefix: "GetSubmatchAsInt failed: ",
 			},
 			{
 				Name:        "MustGetSubmatchAsUint",
-				Fn:          func() { MustGetSubmatchAsUint(req2, 3) }, // not a uint
+				Fn:          func() { httpmock.MustGetSubmatchAsUint(req2, 3) }, // not a uint
 				PanicPrefix: "GetSubmatchAsUint failed: ",
 			},
 			{
 				Name:        "GetSubmatchAsFloat",
-				Fn:          func() { MustGetSubmatchAsFloat(req2, 1) }, // not a float
+				Fn:          func() { httpmock.MustGetSubmatchAsFloat(req2, 1) }, // not a float
 				PanicPrefix: "GetSubmatchAsFloat failed: ",
 			},
 		} {
@@ -1151,8 +1151,8 @@ func TestSubmatches(t *testing.T) {
 	})
 
 	assert.RunAssertRequire("Full test", func(assert, require *td.T) {
-		Activate()
-		defer DeactivateAndReset()
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
 
 		var (
 			id       uint64
@@ -1160,14 +1160,14 @@ func TestSubmatches(t *testing.T) {
 			deltaStr string
 			inc      int64
 		)
-		RegisterResponder("GET", `=~^/id/(\d+)\?delta=(\d+(?:\.\d*)?)&inc=(-?\d+)\z`,
+		httpmock.RegisterResponder("GET", `=~^/id/(\d+)\?delta=(\d+(?:\.\d*)?)&inc=(-?\d+)\z`,
 			func(req *http.Request) (*http.Response, error) {
-				id = MustGetSubmatchAsUint(req, 1)
-				delta = MustGetSubmatchAsFloat(req, 2)
-				deltaStr = MustGetSubmatch(req, 2)
-				inc = MustGetSubmatchAsInt(req, 3)
+				id = httpmock.MustGetSubmatchAsUint(req, 1)
+				delta = httpmock.MustGetSubmatchAsFloat(req, 2)
+				deltaStr = httpmock.MustGetSubmatch(req, 2)
+				inc = httpmock.MustGetSubmatchAsInt(req, 3)
 
-				return NewStringResponse(http.StatusOK, "OK"), nil
+				return httpmock.NewStringResponse(http.StatusOK, "OK"), nil
 			})
 
 		resp, err := http.Get("http://example.tld/id/123?delta=1.2&inc=-5")
@@ -1186,13 +1186,13 @@ func TestCheckStackTracer(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
 	// Full test using Trace() Responder
-	Activate()
-	defer Deactivate()
+	httpmock.Activate()
+	defer httpmock.Deactivate()
 
 	const url = "https://foo.bar/"
 	var mesg string
-	RegisterResponder("GET", url,
-		NewStringResponder(200, "{}").
+	httpmock.RegisterResponder("GET", url,
+		httpmock.NewStringResponder(200, "{}").
 			Trace(func(args ...interface{}) { mesg = args[0].(string) }))
 
 	resp, err := http.Get(url)
@@ -1206,31 +1206,43 @@ func TestCheckStackTracer(t *testing.T) {
 }
 
 func TestCheckMethod(t *testing.T) {
-	mt := NewMockTransport()
+	mt := httpmock.NewMockTransport()
 
 	const expected = `You probably want to use method "GET" instead of "get"? If not and so want to disable this check, set MockTransport.DontCheckMethod field to true`
 
 	td.CmpPanic(t,
-		func() { mt.RegisterResponder("get", "/pipo", NewStringResponder(200, "")) },
+		func() {
+			mt.RegisterResponder("get", "/pipo", httpmock.NewStringResponder(200, ""))
+		},
 		expected)
 
 	td.CmpPanic(t,
-		func() { mt.RegisterRegexpResponder("get", regexp.MustCompile("."), NewStringResponder(200, "")) },
+		func() {
+			mt.RegisterRegexpResponder("get", regexp.MustCompile("."), httpmock.NewStringResponder(200, ""))
+		},
 		expected)
 
 	td.CmpPanic(t,
-		func() { mt.RegisterResponderWithQuery("get", "/pipo", url.Values(nil), NewStringResponder(200, "")) },
+		func() {
+			mt.RegisterResponderWithQuery("get", "/pipo", url.Values(nil), httpmock.NewStringResponder(200, ""))
+		},
 		expected)
 
 	//
 	// No longer panics
 	mt.DontCheckMethod = true
 	td.CmpNotPanic(t,
-		func() { mt.RegisterResponder("get", "/pipo", NewStringResponder(200, "")) })
+		func() {
+			mt.RegisterResponder("get", "/pipo", httpmock.NewStringResponder(200, ""))
+		})
 
 	td.CmpNotPanic(t,
-		func() { mt.RegisterRegexpResponder("get", regexp.MustCompile("."), NewStringResponder(200, "")) })
+		func() {
+			mt.RegisterRegexpResponder("get", regexp.MustCompile("."), httpmock.NewStringResponder(200, ""))
+		})
 
 	td.CmpNotPanic(t,
-		func() { mt.RegisterResponderWithQuery("get", "/pipo", url.Values(nil), NewStringResponder(200, "")) })
+		func() {
+			mt.RegisterResponderWithQuery("get", "/pipo", url.Values(nil), httpmock.NewStringResponder(200, ""))
+		})
 }
