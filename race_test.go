@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	. "github.com/jarcoal/httpmock"
+	"github.com/jarcoal/httpmock"
 )
 
 func TestActivateNonDefaultRace(t *testing.T) {
@@ -14,7 +14,7 @@ func TestActivateNonDefaultRace(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			defer wg.Done()
-			ActivateNonDefault(&http.Client{})
+			httpmock.ActivateNonDefault(&http.Client{})
 		}()
 	}
 	wg.Wait()

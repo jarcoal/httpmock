@@ -16,14 +16,14 @@ import (
 
 	"github.com/maxatome/go-testdeep/td"
 
-	. "github.com/jarcoal/httpmock"
+	"github.com/jarcoal/httpmock"
 	"github.com/jarcoal/httpmock/internal"
 )
 
 func TestResponderFromResponse(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
-	responder := ResponderFromResponse(NewStringResponse(200, "hello world"))
+	responder := httpmock.ResponderFromResponse(httpmock.NewStringResponse(200, "hello world"))
 
 	req, err := http.NewRequest(http.MethodGet, testURL, nil)
 	require.CmpNoError(err)
@@ -53,13 +53,13 @@ func TestResponderFromResponse(t *testing.T) {
 func TestResponderFromResponses(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
-	jsonResponse, err := NewJsonResponse(200, map[string]string{"test": "toto"})
+	jsonResponse, err := httpmock.NewJsonResponse(200, map[string]string{"test": "toto"})
 	require.CmpNoError(err)
 
-	responder := ResponderFromMultipleResponses(
+	responder := httpmock.ResponderFromMultipleResponses(
 		[]*http.Response{
 			jsonResponse,
-			NewStringResponse(200, "hello world"),
+			httpmock.NewStringResponse(200, "hello world"),
 		},
 	)
 
@@ -92,7 +92,7 @@ func TestResponderFromResponses(t *testing.T) {
 	assert.String(err, "not enough responses provided: responder called 3 time(s) but 2 response(s) provided")
 
 	// fn usage
-	responder = ResponderFromMultipleResponses([]*http.Response{}, func(args ...interface{}) {})
+	responder = httpmock.ResponderFromMultipleResponses([]*http.Response{}, func(args ...interface{}) {})
 	_, err = responder(req)
 	assert.String(err, "not enough responses provided: responder called 1 time(s) but 0 response(s) provided")
 	if assert.Isa(err, internal.StackTracer{}) {
@@ -103,7 +103,7 @@ func TestResponderFromResponses(t *testing.T) {
 func TestNewNotFoundResponder(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
-	responder := NewNotFoundResponder(func(args ...interface{}) {})
+	responder := httpmock.NewNotFoundResponder(func(args ...interface{}) {})
 
 	req, err := http.NewRequest("GET", "http://foo.bar/path", nil)
 	require.CmpNoError(err)
@@ -118,7 +118,7 @@ func TestNewNotFoundResponder(t *testing.T) {
 	}
 
 	// nil fn
-	responder = NewNotFoundResponder(nil)
+	responder = httpmock.NewNotFoundResponder(nil)
 
 	resp, err = responder(req)
 	assert.Nil(resp)
@@ -135,7 +135,7 @@ func TestNewStringResponse(t *testing.T) {
 		body   = "hello world"
 		status = 200
 	)
-	response := NewStringResponse(status, body)
+	response := httpmock.NewStringResponse(status, body)
 
 	data, err := ioutil.ReadAll(response.Body)
 	require.CmpNoError(err)
@@ -151,7 +151,7 @@ func TestNewBytesResponse(t *testing.T) {
 		body   = "hello world"
 		status = 200
 	)
-	response := NewBytesResponse(status, []byte(body))
+	response := httpmock.NewBytesResponse(status, []byte(body))
 
 	data, err := ioutil.ReadAll(response.Body)
 	require.CmpNoError(err)
@@ -177,10 +177,10 @@ func TestNewJsonResponse(t *testing.T) {
 		expected string
 	}{
 		{body: &schema{"world"}, expected: `{"hello":"world"}`},
-		{body: File(fileName), expected: `{"test":true}`},
+		{body: httpmock.File(fileName), expected: `{"test":true}`},
 	} {
 		assert.Run(fmt.Sprintf("#%d", i), func(assert *td.T) {
-			response, err := NewJsonResponse(200, test.body)
+			response, err := httpmock.NewJsonResponse(200, test.body)
 			if !assert.CmpNoError(err) {
 				return
 			}
@@ -191,12 +191,12 @@ func TestNewJsonResponse(t *testing.T) {
 	}
 
 	// Error case
-	response, err := NewJsonResponse(200, func() {})
+	response, err := httpmock.NewJsonResponse(200, func() {})
 	assert.CmpError(err)
 	assert.Nil(response)
 }
 
-func checkResponder(assert *td.T, r Responder, expectedStatus int, expectedBody string) {
+func checkResponder(assert *td.T, r httpmock.Responder, expectedStatus int, expectedBody string) {
 	assert.Helper()
 
 	req, err := http.NewRequest(http.MethodGet, "/foo", nil)
@@ -219,7 +219,7 @@ func TestNewJsonResponder(t *testing.T) {
 	assert := td.Assert(t)
 
 	assert.Run("OK", func(assert *td.T) {
-		r, err := NewJsonResponder(200, map[string]int{"foo": 42})
+		r, err := httpmock.NewJsonResponder(200, map[string]int{"foo": 42})
 		if assert.CmpNoError(err) {
 			checkResponder(assert, r, 200, `{"foo":42}`)
 		}
@@ -231,14 +231,14 @@ func TestNewJsonResponder(t *testing.T) {
 		fileName := filepath.Join(dir, "ok.json")
 		writeFile(assert, fileName, []byte(`{  "foo"  :  42  }`))
 
-		r, err := NewJsonResponder(200, File(fileName))
+		r, err := httpmock.NewJsonResponder(200, httpmock.File(fileName))
 		if assert.CmpNoError(err) {
 			checkResponder(assert, r, 200, `{"foo":42}`)
 		}
 	})
 
 	assert.Run("Error", func(assert *td.T) {
-		r, err := NewJsonResponder(200, func() {})
+		r, err := httpmock.NewJsonResponder(200, func() {})
 		assert.CmpError(err)
 		assert.Nil(r)
 	})
@@ -246,14 +246,14 @@ func TestNewJsonResponder(t *testing.T) {
 	assert.Run("OK don't panic", func(assert *td.T) {
 		assert.CmpNotPanic(
 			func() {
-				r := NewJsonResponderOrPanic(200, map[string]int{"foo": 42})
+				r := httpmock.NewJsonResponderOrPanic(200, map[string]int{"foo": 42})
 				checkResponder(assert, r, 200, `{"foo":42}`)
 			})
 	})
 
 	assert.Run("Panic", func(assert *td.T) {
 		assert.CmpPanic(
-			func() { NewJsonResponderOrPanic(200, func() {}) },
+			func() { httpmock.NewJsonResponderOrPanic(200, func() {}) },
 			td.Ignore())
 	})
 }
@@ -283,10 +283,10 @@ func TestNewXmlResponse(t *testing.T) {
 		expected string
 	}{
 		{body: body, expected: expectedBody},
-		{body: File(fileName), expected: expectedBody},
+		{body: httpmock.File(fileName), expected: expectedBody},
 	} {
 		assert.Run(fmt.Sprintf("#%d", i), func(assert *td.T) {
-			response, err := NewXmlResponse(200, test.body)
+			response, err := httpmock.NewXmlResponse(200, test.body)
 			if !assert.CmpNoError(err) {
 				return
 			}
@@ -297,7 +297,7 @@ func TestNewXmlResponse(t *testing.T) {
 	}
 
 	// Error case
-	response, err := NewXmlResponse(200, func() {})
+	response, err := httpmock.NewXmlResponse(200, func() {})
 	assert.CmpError(err)
 	assert.Nil(response)
 }
@@ -312,7 +312,7 @@ func TestNewXmlResponder(t *testing.T) {
 	expectedBody := string(b)
 
 	assert.Run("OK", func(assert *td.T) {
-		r, err := NewXmlResponder(200, body)
+		r, err := httpmock.NewXmlResponder(200, body)
 		if assert.CmpNoError(err) {
 			checkResponder(assert, r, 200, expectedBody)
 		}
@@ -324,14 +324,14 @@ func TestNewXmlResponder(t *testing.T) {
 		fileName := filepath.Join(dir, "ok.xml")
 		writeFile(assert, fileName, b)
 
-		r, err := NewXmlResponder(200, File(fileName))
+		r, err := httpmock.NewXmlResponder(200, httpmock.File(fileName))
 		if assert.CmpNoError(err) {
 			checkResponder(assert, r, 200, expectedBody)
 		}
 	})
 
 	assert.Run("Error", func(assert *td.T) {
-		r, err := NewXmlResponder(200, func() {})
+		r, err := httpmock.NewXmlResponder(200, func() {})
 		assert.CmpError(err)
 		assert.Nil(r)
 	})
@@ -339,14 +339,14 @@ func TestNewXmlResponder(t *testing.T) {
 	assert.Run("OK don't panic", func(assert *td.T) {
 		assert.CmpNotPanic(
 			func() {
-				r := NewXmlResponderOrPanic(200, body)
+				r := httpmock.NewXmlResponderOrPanic(200, body)
 				checkResponder(assert, r, 200, expectedBody)
 			})
 	})
 
 	assert.Run("Panic", func(assert *td.T) {
 		assert.CmpPanic(
-			func() { NewXmlResponderOrPanic(200, func() {}) },
+			func() { httpmock.NewXmlResponderOrPanic(200, func() {}) },
 			td.Ignore())
 	})
 }
@@ -355,7 +355,7 @@ func TestNewErrorResponder(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
 	origError := errors.New("oh no")
-	responder := NewErrorResponder(origError)
+	responder := httpmock.NewErrorResponder(origError)
 
 	req, err := http.NewRequest(http.MethodGet, testURL, nil)
 	require.CmpNoError(err)
@@ -375,8 +375,8 @@ func TestResponseBody(t *testing.T) {
 
 	assert.Run("http.Response", func(assert *td.T) {
 		for i, response := range []*http.Response{
-			NewBytesResponse(status, []byte(body)),
-			NewStringResponse(status, body),
+			httpmock.NewBytesResponse(status, []byte(body)),
+			httpmock.NewStringResponse(status, body),
 		} {
 			assert.Run(fmt.Sprintf("resp #%d", i), func(assert *td.T) {
 				assertBody(assert, response, body)
@@ -391,9 +391,9 @@ func TestResponseBody(t *testing.T) {
 	})
 
 	assert.Run("Responder", func(assert *td.T) {
-		for i, responder := range []Responder{
-			NewBytesResponder(200, []byte(body)),
-			NewStringResponder(200, body),
+		for i, responder := range []httpmock.Responder{
+			httpmock.NewBytesResponder(200, []byte(body)),
+			httpmock.NewStringResponder(200, body),
 		} {
 			assert.Run(fmt.Sprintf("resp #%d", i), func(assert *td.T) {
 				req, _ := http.NewRequest("GET", "http://foo.bar", nil)
@@ -418,7 +418,7 @@ func TestResponder(t *testing.T) {
 
 	resp := &http.Response{}
 
-	chk := func(r Responder, expectedResp *http.Response, expectedErr string) {
+	chk := func(r httpmock.Responder, expectedResp *http.Response, expectedErr string) {
 		t.Helper()
 		gotResp, gotErr := r(req)
 		td.CmpShallow(t, gotResp, expectedResp)
@@ -444,7 +444,7 @@ func TestResponder(t *testing.T) {
 		called = false
 	}
 
-	r := Responder(func(*http.Request) (*http.Response, error) {
+	r := httpmock.Responder(func(*http.Request) (*http.Response, error) {
 		called = true
 		return resp, nil
 	})
@@ -520,13 +520,13 @@ func TestResponder_Then(t *testing.T) {
 	//
 	// Then
 	var stack string
-	newResponder := func(level string) Responder {
+	newResponder := func(level string) httpmock.Responder {
 		return func(*http.Request) (*http.Response, error) {
 			stack += level
-			return NewStringResponse(200, level), nil
+			return httpmock.NewStringResponse(200, level), nil
 		}
 	}
-	var rt Responder
+	var rt httpmock.Responder
 	chk := func(assert *td.T, expectedLevel, expectedStack string) {
 		assert.Helper()
 		resp, err := rt(req)
@@ -595,12 +595,12 @@ func TestResponder_SetContentLength(t *testing.T) {
 
 	testCases := []struct {
 		name   string
-		r      Responder
+		r      httpmock.Responder
 		expLen int
 	}{
 		{
 			name: "nil body",
-			r: ResponderFromResponse(&http.Response{
+			r: httpmock.ResponderFromResponse(&http.Response{
 				StatusCode:    200,
 				ContentLength: -1,
 			}),
@@ -608,7 +608,7 @@ func TestResponder_SetContentLength(t *testing.T) {
 		},
 		{
 			name: "http.NoBody",
-			r: ResponderFromResponse(&http.Response{
+			r: httpmock.ResponderFromResponse(&http.Response{
 				Body:          http.NoBody,
 				StatusCode:    200,
 				ContentLength: -1,
@@ -617,18 +617,18 @@ func TestResponder_SetContentLength(t *testing.T) {
 		},
 		{
 			name:   "string",
-			r:      NewStringResponder(200, "BODY"),
+			r:      httpmock.NewStringResponder(200, "BODY"),
 			expLen: 4,
 		},
 		{
 			name:   "bytes",
-			r:      NewBytesResponder(200, []byte("BODY")),
+			r:      httpmock.NewBytesResponder(200, []byte("BODY")),
 			expLen: 4,
 		},
 		{
 			name: "from response OK",
-			r: ResponderFromResponse(&http.Response{
-				Body:          NewRespBodyFromString("BODY"),
+			r: httpmock.ResponderFromResponse(&http.Response{
+				Body:          httpmock.NewRespBodyFromString("BODY"),
 				StatusCode:    200,
 				ContentLength: -1,
 			}),
@@ -662,7 +662,7 @@ func TestResponder_SetContentLength(t *testing.T) {
 	}
 
 	assert.Run("error", func(assert *td.T) {
-		resp, err := NewErrorResponder(errors.New("an error occurred")).
+		resp, err := httpmock.NewErrorResponder(errors.New("an error occurred")).
 			SetContentLength()(req)
 		assert.Nil(resp)
 		assert.String(err, "an error occurred")
@@ -675,11 +675,11 @@ func TestResponder_HeaderAddSet(t *testing.T) {
 	req, err := http.NewRequest(http.MethodGet, "http://foo.bar", nil)
 	require.CmpNoError(err)
 
-	orig := NewStringResponder(200, "body")
-	origNilHeader := ResponderFromResponse(&http.Response{
+	orig := httpmock.NewStringResponder(200, "body")
+	origNilHeader := httpmock.ResponderFromResponse(&http.Response{
 		Status:        "200",
 		StatusCode:    200,
-		Body:          NewRespBodyFromString("body"),
+		Body:          httpmock.NewRespBodyFromString("body"),
 		ContentLength: -1,
 	})
 
@@ -688,7 +688,7 @@ func TestResponder_HeaderAddSet(t *testing.T) {
 
 	testCases := []struct {
 		name string
-		orig Responder
+		orig httpmock.Responder
 	}{
 		{name: "orig", orig: orig},
 		{name: "nil header", orig: origNilHeader},
@@ -734,7 +734,7 @@ func TestResponder_HeaderAddSet(t *testing.T) {
 	})
 
 	assert.Run("error", func(assert *td.T) {
-		origErr := NewErrorResponder(errors.New("an error occurred"))
+		origErr := httpmock.NewErrorResponder(errors.New("an error occurred"))
 
 		assert.Run("HeaderAdd", func(assert *td.T) {
 			r := origErr.HeaderAdd(http.Header{"foo": {"bar"}})
@@ -758,9 +758,9 @@ func TestParallelResponder(t *testing.T) {
 
 	body := strings.Repeat("ABC-", 1000)
 
-	for ir, r := range []Responder{
-		NewStringResponder(200, body),
-		NewBytesResponder(200, []byte(body)),
+	for ir, r := range []httpmock.Responder{
+		httpmock.NewStringResponder(200, body),
+		httpmock.NewBytesResponder(200, []byte(body)),
 	} {
 		var wg sync.WaitGroup
 		for n := 0; n < 100; n++ {
