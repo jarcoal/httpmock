@@ -414,7 +414,7 @@ func (m *MockTransport) Responders() []string {
 
 func runCancelable(responder Responder, req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
-	if req.Cancel == nil && ctx.Done() == nil { // nolint: staticcheck
+	if req.Cancel == nil && ctx.Done() == nil { //nolint: staticcheck
 		resp, err := responder(req)
 		return resp, internal.CheckStackTracer(req, err)
 	}
@@ -432,7 +432,7 @@ func runCancelable(responder Responder, req *http.Request) (*http.Response, erro
 
 	go func() {
 		select {
-		case <-req.Cancel: // nolint: staticcheck
+		case <-req.Cancel: //nolint: staticcheck
 			resultch <- result{
 				response: nil,
 				err:      errors.New("request canceled"),
@@ -707,7 +707,7 @@ found:
 		if mr.responder != nil {
 			m.regexpResponders = append(m.regexpResponders, rxResp)
 		}
-		break // nolint: staticcheck
+		break //nolint: staticcheck
 	}
 
 	mrk := matchRouteKey{
@@ -951,7 +951,7 @@ func sortedQuery(m url.Values) string {
 	sort.Strings(keys)
 
 	var b bytes.Buffer
-	var values []string // nolint: prealloc
+	var values []string //nolint: prealloc
 
 	for _, k := range keys {
 		// Do not alter the passed url.Values

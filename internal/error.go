@@ -7,7 +7,7 @@ import (
 
 // NoResponderFound is returned when no responders are found for a
 // given HTTP method and URL.
-var NoResponderFound = errors.New("no responder found") // nolint: revive
+var NoResponderFound = errors.New("no responder found") //nolint: revive
 
 // ErrorNoResponderFoundMistake encapsulates a NoResponderFound
 // error probably due to a user error on the method or URL path.

@@ -684,7 +684,7 @@ func TestMockTransportRespectsCancel(t *testing.T) {
 			switch c.withCancel {
 			case cancelReq:
 				cancel := make(chan struct{}, 1)
-				req.Cancel = cancel // nolint: staticcheck
+				req.Cancel = cancel //nolint: staticcheck
 				if c.cancelNow {
 					cancel <- struct{}{}
 				}
@@ -757,12 +757,12 @@ func TestMockTransportCallCountReset(t *testing.T) {
 	require.CmpNoError(err)
 
 	buff := new(bytes.Buffer)
-	json.NewEncoder(buff).Encode("{}") // nolint: errcheck
+	json.NewEncoder(buff).Encode("{}") //nolint: errcheck
 	_, err = http.Post(url2, "application/json", buff)
 	require.CmpNoError(err)
 
 	buff.Reset()
-	json.NewEncoder(buff).Encode(`{"pipo":"bingo"}`) // nolint: errcheck
+	json.NewEncoder(buff).Encode(`{"pipo":"bingo"}`) //nolint: errcheck
 	_, err = http.Post(url2, "application/json", buff)
 	require.CmpNoError(err)
 
@@ -808,12 +808,12 @@ func TestMockTransportCallCountZero(t *testing.T) {
 	require.CmpNoError(err)
 
 	buff := new(bytes.Buffer)
-	json.NewEncoder(buff).Encode("{}") // nolint: errcheck
+	json.NewEncoder(buff).Encode("{}") //nolint: errcheck
 	_, err = http.Post(url2, "application/json", buff)
 	require.CmpNoError(err)
 
 	buff.Reset()
-	json.NewEncoder(buff).Encode(`{"pipo":"bingo"}`) // nolint: errcheck
+	json.NewEncoder(buff).Encode(`{"pipo":"bingo"}`) //nolint: errcheck
 	_, err = http.Post(url2, "application/json", buff)
 	require.CmpNoError(err)
 
@@ -1122,7 +1122,7 @@ func TestSubmatches(t *testing.T) {
 		}{
 			{
 				Name:        "GetSubmatch & n < 1",
-				Fn:          func() { httpmock.GetSubmatch(req, 0) }, // nolint: errcheck
+				Fn:          func() { httpmock.GetSubmatch(req, 0) }, //nolint: errcheck
 				PanicPrefix: "getting submatches starts at 1, not 0",
 			},
 			{
