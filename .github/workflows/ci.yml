@@ -32,7 +32,7 @@ jobs:
         if: matrix.full-tests
         run: |
           curl -sL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh |
-              sh -s -- -b $HOME/go/bin v1.55.2
+              sh -s -- -b $HOME/go/bin v1.57.2
           $HOME/go/bin/golangci-lint run --max-issues-per-linter 0 \
                                          --max-same-issues 0 \
                                          --exclude="unused-parameter: parameter '[^']+' seems to be unused, consider removing or renaming it as _" \
