@@ -196,6 +196,41 @@ func TestNewJsonResponse(t *testing.T) {
 	assert.Nil(response)
 }
 
+func TestNewJsonResponseOrPanic(t *testing.T) {
+	assert := td.Assert(t)
+
+	type schema struct {
+		Hello string `json:"hello"`
+	}
+
+	dir, cleanup := tmpDir(assert)
+	defer cleanup()
+	fileName := filepath.Join(dir, "ok.json")
+	writeFile(assert, fileName, []byte(`{ "test": true }`))
+
+	for i, test := range []struct {
+		body     interface{}
+		expected string
+	}{
+		{body: &schema{"world"}, expected: `{"hello":"world"}`},
+		{body: httpmock.File(fileName), expected: `{"test":true}`},
+	} {
+		assert.Run(fmt.Sprintf("#%d", i), func(assert *td.T) {
+			assert.CmpNotPanic(func() {
+				response := httpmock.NewJsonResponseOrPanic(200, test.body)
+				assert.Cmp(response.StatusCode, 200)
+				assert.Cmp(response.Header.Get("Content-Type"), "application/json")
+				assertBody(assert, response, test.expected)
+			})
+		})
+	}
+
+	// Error case
+	assert.CmpPanic(
+		func() { httpmock.NewJsonResponseOrPanic(200, func() {}) },
+		td.Contains("json: unsupported type"))
+}
+
 func checkResponder(assert *td.T, r httpmock.Responder, expectedStatus int, expectedBody string) {
 	assert.Helper()
 

@@ -586,6 +586,32 @@ func NewJsonResponse(status int, body any) (*http.Response, error) { // nolint: 
 	return response, nil
 }
 
+// NewJsonResponseOrPanic is like [NewJsonResponse] but panics in case of error.
+//
+// It simplifies the call of [ResponderFromMultipleResponses], avoiding the
+// use of a temporary variable and an error check, and so can be used in such
+// context:
+//
+//	httpmock.RegisterResponder(
+//	  "GET",
+//	  "/test/path",
+//	  httpmock.ResponderFromMultipleResponses([]*http.Response{
+//	    httpmock.NewJsonResponseOrPanic(200, &MyFirstResponseBody),
+//	    httpmock.NewJsonResponseOrPanic(200, &MySecondResponseBody),
+//	  }),
+//	)
+//
+// To pass the content of an existing file as body use [File] as in:
+//
+//	httpmock.NewJsonResponseOrPanic(200, httpmock.File("body.json"))
+func NewJsonResponseOrPanic(status int, body any) *http.Response { //nolint: revive
+	response, err := NewJsonResponse(status, body)
+	if err != nil {
+		panic(err)
+	}
+	return response
+}
+
 // NewJsonResponder creates a [Responder] from a given body (as an
 // any that is encoded to JSON) and status code.
 //
