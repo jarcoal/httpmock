@@ -526,7 +526,7 @@ func isRegexpURL(url string) bool {
 	return strings.HasPrefix(url, regexpPrefix)
 }
 
-func (m *MockTransport) checkMethod(method string, matcher Matcher) {
+func (m *MockTransport) checkMethod(method string) {
 	if !m.DontCheckMethod && methodProbablyWrong(method) {
 		panic(fmt.Sprintf("You probably want to use method %q instead of %q? If not and so want to disable this check, set MockTransport.DontCheckMethod field to true",
 			strings.ToUpper(method),
@@ -594,7 +594,7 @@ func (m *MockTransport) checkMethod(method string, matcher Matcher) {
 // Note that [github.com/maxatome/tdhttpmock] provides powerful helpers
 // to create matchers with the help of [github.com/maxatome/go-testdeep].
 func (m *MockTransport) RegisterMatcherResponder(method, url string, matcher Matcher, responder Responder) {
-	m.checkMethod(method, matcher)
+	m.checkMethod(method)
 
 	mr := matchResponder{
 		matcher:   matcher,
@@ -775,7 +775,7 @@ found:
 // Note that [github.com/maxatome/tdhttpmock] provides powerful helpers
 // to create matchers with the help of [github.com/maxatome/go-testdeep].
 func (m *MockTransport) RegisterRegexpMatcherResponder(method string, urlRegexp *regexp.Regexp, matcher Matcher, responder Responder) {
-	m.checkMethod(method, matcher)
+	m.checkMethod(method)
 
 	m.registerRegexpResponder(regexpResponder{
 		origRx:     regexpPrefix + urlRegexp.String(),
