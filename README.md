@@ -24,7 +24,7 @@ populate your `go.mod` with the latest httpmock release, now
 ```go
 func TestFetchArticles(t *testing.T) {
   httpmock.Activate()
-  defer httpmock.DeactivateAndReset()
+  t.Cleanup(httpmock.DeactivateAndReset)
 
   // Exact URL match
   httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles",
@@ -52,7 +52,7 @@ func TestFetchArticles(t *testing.T) {
 ```go
 func TestFetchArticles(t *testing.T) {
   httpmock.Activate()
-  defer httpmock.DeactivateAndReset()
+  t.Cleanup(httpmock.DeactivateAndReset)
 
   // our database of articles
   articles := make([]map[string]interface{}, 0)
