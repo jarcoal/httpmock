@@ -22,7 +22,7 @@ jobs:
     steps:
       - name: Setup go
         run: |
-          curl -sL https://raw.githubusercontent.com/maxatome/install-go/v3.5/install-go.pl |
+          curl -sL https://raw.githubusercontent.com/maxatome/install-go/v3.6/install-go.pl |
               perl - ${{ matrix.go-version }} $HOME/go
 
       - name: Checkout code
@@ -32,7 +32,7 @@ jobs:
         if: matrix.full-tests
         run: |
           curl -sL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh |
-              sh -s -- -b $HOME/go/bin v1.60.1
+              sh -s -- -b $HOME/go/bin v1.61.0
           $HOME/go/bin/golangci-lint run --max-issues-per-linter 0 \
                                          --max-same-issues 0 \
                                          --exclude="unused-parameter: parameter '[^']+' seems to be unused, consider removing or renaming it as _" \
