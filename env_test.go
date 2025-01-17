@@ -53,5 +53,6 @@ func TestEnv(t *testing.T) {
 		"expected client1.Transport to not be our DefaultTransport")
 	require.Not(client2.Transport, httpmock.DefaultTransport,
 		"expected client2.Transport to not be our DefaultTransport")
+	httpmock.DeactivateNonDefault(client1)
 	httpmock.Deactivate()
 }

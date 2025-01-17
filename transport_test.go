@@ -23,9 +23,17 @@ import (
 
 const testURL = "http://www.example.com/"
 
+type errTransport struct{}
+
+var errTransportErr = errors.New("httpmock test error")
+
+// RoundTrip implements [http.RoundTripper] and always returns an error.
+func (errTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errTransportErr
+}
+
 func TestMockTransport(t *testing.T) {
-	httpmock.Activate()
-	defer httpmock.Deactivate()
+	httpmock.Activate(t)
 
 	url := "https://github.com/foo/bar"
 	body := `["hello world"]` + "\n"
@@ -95,8 +103,7 @@ func TestMockTransport(t *testing.T) {
 }
 
 func TestRegisterMatcherResponder(t *testing.T) {
-	httpmock.Activate()
-	defer httpmock.DeactivateAndReset()
+	httpmock.Activate(t)
 
 	httpmock.RegisterMatcherResponder("POST", "/foo",
 		httpmock.NewMatcher(
@@ -286,8 +293,7 @@ func TestRegisterMatcherResponder(t *testing.T) {
 func TestMockTransportDefaultMethod(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
-	httpmock.Activate()
-	defer httpmock.Deactivate()
+	httpmock.Activate(assert)
 
 	const urlString = "https://github.com/"
 	url, err := url.Parse(urlString)
@@ -345,8 +351,7 @@ func TestMockTransportReset(t *testing.T) {
 }
 
 func TestMockTransportNoResponder(t *testing.T) {
-	httpmock.Activate()
-	defer httpmock.DeactivateAndReset()
+	httpmock.Activate(t)
 
 	httpmock.Reset()
 
@@ -384,8 +389,7 @@ func TestMockTransportNoResponder(t *testing.T) {
 func TestMockTransportQuerystringFallback(t *testing.T) {
 	assert := td.Assert(t)
 
-	httpmock.Activate()
-	defer httpmock.DeactivateAndReset()
+	httpmock.Activate(assert)
 
 	// register the testURL responder
 	httpmock.RegisterResponder("GET", testURL, httpmock.NewStringResponder(200, "hello world"))
@@ -405,7 +409,7 @@ func TestMockTransportQuerystringFallback(t *testing.T) {
 
 func TestMockTransportPathOnlyFallback(t *testing.T) {
 	// Just in case a panic occurs
-	defer httpmock.DeactivateAndReset()
+	t.Cleanup(httpmock.DeactivateAndReset)
 
 	for _, test := range []struct {
 		Responder string
@@ -595,19 +599,12 @@ func TestMockTransportNonDefault(t *testing.T) {
 
 	// create a custom http client w/ custom Roundtripper
 	client := &http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			Dial: (&net.Dialer{
-				Timeout:   60 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).Dial,
-			TLSHandshakeTimeout: 60 * time.Second,
-		},
+		Transport: errTransport{},
 	}
 
 	// activate mocks for the client
 	httpmock.ActivateNonDefault(client)
-	defer httpmock.DeactivateAndReset()
+	t.Cleanup(httpmock.DeactivateAndReset)
 
 	body := "hello world!"
 
@@ -620,13 +617,20 @@ func TestMockTransportNonDefault(t *testing.T) {
 	require.CmpNoError(err)
 
 	assertBody(assert, resp, body)
+
+	// Restore the initial transport
+	httpmock.DeactivateNonDefault(client)
+	_, err = client.Do(req)
+	td.Cmp(t, err, td.ErrorIs(errTransportErr))
+
+	// Can be called again, should be a no-op
+	td.CmpNotPanic(t, func() { httpmock.DeactivateNonDefault(client) })
 }
 
 func TestMockTransportRespectsCancel(t *testing.T) {
 	assert := td.Assert(t)
 
-	httpmock.Activate()
-	defer httpmock.DeactivateAndReset()
+	httpmock.Activate(assert)
 
 	const (
 		cancelNone = iota
@@ -721,7 +725,7 @@ func TestMockTransportRespectsTimeout(t *testing.T) {
 	}
 
 	httpmock.ActivateNonDefault(client)
-	defer httpmock.DeactivateAndReset()
+	t.Cleanup(httpmock.DeactivateAndReset)
 
 	httpmock.RegisterResponder(
 		"GET", testURL,
@@ -739,8 +743,7 @@ func TestMockTransportCallCountReset(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
 	httpmock.Reset()
-	httpmock.Activate()
-	defer httpmock.Deactivate()
+	httpmock.Activate(assert)
 
 	const (
 		url  = "https://github.com/path?b=1&a=2"
@@ -790,8 +793,7 @@ func TestMockTransportCallCountZero(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
 	httpmock.Reset()
-	httpmock.Activate()
-	defer httpmock.Deactivate()
+	httpmock.Activate(assert)
 
 	const (
 		url  = "https://github.com/path?b=1&a=2"
@@ -991,8 +993,7 @@ func TestRegisterResponderWithQueryPanic(t *testing.T) {
 }
 
 func TestRegisterRegexpResponder(t *testing.T) {
-	httpmock.Activate()
-	defer httpmock.DeactivateAndReset()
+	httpmock.Activate(t)
 
 	rx := regexp.MustCompile("ex.mple")
 
@@ -1151,8 +1152,7 @@ func TestSubmatches(t *testing.T) {
 	})
 
 	assert.RunAssertRequire("Full test", func(assert, require *td.T) {
-		httpmock.Activate()
-		defer httpmock.DeactivateAndReset()
+		httpmock.Activate(assert)
 
 		var (
 			id       uint64
@@ -1186,8 +1186,7 @@ func TestCheckStackTracer(t *testing.T) {
 	assert, require := td.AssertRequire(t)
 
 	// Full test using Trace() Responder
-	httpmock.Activate()
-	defer httpmock.Deactivate()
+	httpmock.Activate(assert)
 
 	const url = "https://foo.bar/"
 	var mesg string

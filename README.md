@@ -4,7 +4,7 @@ Easy mocking of http responses from external resources.
 
 ## Install
 
-Currently supports Go 1.13 to 1.23 and is regularly tested against tip.
+Currently supports Go 1.16 to 1.23 and is regularly tested against tip.
 
 `v1` branch has to be used instead of `master`.
 
@@ -23,8 +23,7 @@ populate your `go.mod` with the latest httpmock release, now
 ### Simple Example:
 ```go
 func TestFetchArticles(t *testing.T) {
-  httpmock.Activate()
-  t.Cleanup(httpmock.DeactivateAndReset)
+  httpmock.Activate(t)
 
   // Exact URL match
   httpmock.RegisterResponder("GET", "https://api.mybiz.com/articles",
@@ -51,8 +50,7 @@ func TestFetchArticles(t *testing.T) {
 ### Advanced Example:
 ```go
 func TestFetchArticles(t *testing.T) {
-  httpmock.Activate()
-  t.Cleanup(httpmock.DeactivateAndReset)
+  httpmock.Activate(t)
 
   // our database of articles
   articles := make([]map[string]interface{}, 0)
@@ -138,18 +136,13 @@ type MySuite struct{}
 
 func (s *MySuite) Setup(t *td.T) error {
   // block all HTTP requests
-  httpmock.Activate()
+  httpmock.Activate(t)
   return nil
 }
 
 func (s *MySuite) PostTest(t *td.T, testName string) error {
   // remove any mocks after each test
   httpmock.Reset()
-  return nil
-}
-
-func (s *MySuite) Destroy(t *td.T) error {
-  httpmock.DeactivateAndReset()
   return nil
 }
 
