@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil" //nolint: staticcheck
 	"net/http"
 	"runtime"
 	"strings"
@@ -227,7 +226,7 @@ func BodyContainsBytes(subslice []byte) Matcher {
 	return NewMatcher("",
 		func(req *http.Request) bool {
 			rearmBody(req)
-			b, err := ioutil.ReadAll(req.Body)
+			b, err := io.ReadAll(req.Body)
 			return err == nil && bytes.Contains(b, subslice)
 		})
 }
@@ -247,7 +246,7 @@ func BodyContainsString(substr string) Matcher {
 	return NewMatcher("",
 		func(req *http.Request) bool {
 			rearmBody(req)
-			b, err := ioutil.ReadAll(req.Body)
+			b, err := io.ReadAll(req.Body)
 			return err == nil && bytes.Contains(b, []byte(substr))
 		})
 }
@@ -500,8 +499,8 @@ func (b *bodyCopyOnRead) rearm() {
 
 func (b *bodyCopyOnRead) copy() {
 	if _, ok := b.body.(buffer); !ok && b.body != nil && b.body != http.NoBody {
-		buf, _ := ioutil.ReadAll(b.body)
-		b.body.Close()
+		buf, _ := io.ReadAll(b.body)
+		b.body.Close() //nolint: errcheck
 		b.body = buffer{bytes.NewReader(buf)}
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil" //nolint: staticcheck
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -43,7 +43,7 @@ func TestMockTransport(t *testing.T) {
 
 	assert := td.Assert(t)
 
-	// Read it as a simple string (ioutil.ReadAll of assertBody will
+	// Read it as a simple string (io.ReadAll of assertBody will
 	// trigger io.EOF)
 	assert.RunAssertRequire("simple", func(assert, require *td.T) {
 		resp, err := http.Get(url)
@@ -91,7 +91,7 @@ func TestMockTransport(t *testing.T) {
 		assert.RunAssertRequire(fmt.Sprintf("try #%d", i), func(assert, require *td.T) {
 			resp, err := http.Get(url)
 			require.CmpNoError(err)
-			defer resp.Body.Close()
+			defer resp.Body.Close() //nolint: errcheck
 
 			var res []string
 			err = json.NewDecoder(resp.Body).Decode(&res)
@@ -116,7 +116,7 @@ func TestRegisterMatcherResponder(t *testing.T) {
 		httpmock.NewMatcher(
 			"01-body-BAR",
 			func(r *http.Request) bool {
-				b, err := ioutil.ReadAll(r.Body)
+				b, err := io.ReadAll(r.Body)
 				return err == nil && bytes.Contains(b, []byte("BAR"))
 			}),
 		httpmock.NewStringResponder(200, "body-BAR"))
@@ -125,7 +125,7 @@ func TestRegisterMatcherResponder(t *testing.T) {
 		httpmock.NewMatcher(
 			"02-body-FOO",
 			func(r *http.Request) bool {
-				b, err := ioutil.ReadAll(r.Body)
+				b, err := io.ReadAll(r.Body)
 				return err == nil && bytes.Contains(b, []byte("FOO"))
 			}),
 		httpmock.NewStringResponder(200, "body-FOO"))

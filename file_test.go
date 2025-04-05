@@ -15,8 +15,7 @@ var _ json.Marshaler = httpmock.File("test.json")
 func TestFile(t *testing.T) {
 	assert := td.Assert(t)
 
-	dir, cleanup := tmpDir(assert)
-	defer cleanup()
+	dir := assert.TempDir()
 
 	assert.Run("Valid JSON file", func(assert *td.T) {
 		okFile := filepath.Join(dir, "ok.json")

@@ -1,7 +1,7 @@
 package httpmock_test
 
 import (
-	"io/ioutil" //nolint: staticcheck
+	"io"
 	"net/http"
 	"os"
 	"testing"
@@ -15,22 +15,15 @@ func assertBody(t testing.TB, resp *http.Response, expected string) bool {
 	require := td.Require(t)
 	require.NotNil(resp)
 
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint: errcheck
 
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	require.CmpNoError(err)
 
 	return td.CmpString(t, data, expected)
 }
 
-func tmpDir(t testing.TB) (string, func()) {
-	t.Helper()
-	dir, err := ioutil.TempDir("", "httpmock")
-	td.Require(t).CmpNoError(err)
-	return dir, func() { os.RemoveAll(dir) }
-}
-
 func writeFile(t testing.TB, file string, content []byte) {
 	t.Helper()
-	td.Require(t).CmpNoError(ioutil.WriteFile(file, content, 0644))
+	td.Require(t).CmpNoError(os.WriteFile(file, content, 0644))
 }
