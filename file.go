@@ -2,7 +2,7 @@ package httpmock
 
 import (
 	"fmt"
-	"io/ioutil" //nolint: staticcheck
+	"os"
 )
 
 // File is a file name. The contents of this file is loaded on demand
@@ -32,7 +32,7 @@ func (f File) MarshalJSON() ([]byte, error) {
 }
 
 func (f File) bytes() ([]byte, error) {
-	return ioutil.ReadFile(string(f))
+	return os.ReadFile(string(f))
 }
 
 // Bytes returns the content of file as a []byte. If an error occurs

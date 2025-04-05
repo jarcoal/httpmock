@@ -576,7 +576,7 @@ func NewBytesResponder(status int, body []byte) Responder {
 // To pass the content of an existing file as body use [File] as in:
 //
 //	httpmock.NewJsonResponse(200, httpmock.File("body.json"))
-func NewJsonResponse(status int, body any) (*http.Response, error) { //nolint: revive
+func NewJsonResponse(status int, body any) (*http.Response, error) { //nolint: revive,staticcheck
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -604,7 +604,7 @@ func NewJsonResponse(status int, body any) (*http.Response, error) { //nolint: r
 // To pass the content of an existing file as body use [File] as in:
 //
 //	httpmock.NewJsonResponseOrPanic(200, httpmock.File("body.json"))
-func NewJsonResponseOrPanic(status int, body any) *http.Response { //nolint: revive
+func NewJsonResponseOrPanic(status int, body any) *http.Response { //nolint: revive,staticcheck
 	response, err := NewJsonResponse(status, body)
 	if err != nil {
 		panic(err)
@@ -618,7 +618,7 @@ func NewJsonResponseOrPanic(status int, body any) *http.Response { //nolint: rev
 // To pass the content of an existing file as body use [File] as in:
 //
 //	httpmock.NewJsonResponder(200, httpmock.File("body.json"))
-func NewJsonResponder(status int, body any) (Responder, error) { //nolint: revive
+func NewJsonResponder(status int, body any) (Responder, error) { //nolint: revive,staticcheck
 	resp, err := NewJsonResponse(status, body)
 	if err != nil {
 		return nil, err
@@ -642,7 +642,7 @@ func NewJsonResponder(status int, body any) (Responder, error) { //nolint: reviv
 // To pass the content of an existing file as body use [File] as in:
 //
 //	httpmock.NewJsonResponderOrPanic(200, httpmock.File("body.json"))
-func NewJsonResponderOrPanic(status int, body any) Responder { //nolint: revive
+func NewJsonResponderOrPanic(status int, body any) Responder { //nolint: revive,staticcheck
 	responder, err := NewJsonResponder(status, body)
 	if err != nil {
 		panic(err)
@@ -657,7 +657,7 @@ func NewJsonResponderOrPanic(status int, body any) Responder { //nolint: revive
 // To pass the content of an existing file as body use [File] as in:
 //
 //	httpmock.NewXmlResponse(200, httpmock.File("body.xml"))
-func NewXmlResponse(status int, body any) (*http.Response, error) { //nolint: revive
+func NewXmlResponse(status int, body any) (*http.Response, error) { //nolint: revive,staticcheck
 	var (
 		encoded []byte
 		err     error
@@ -681,7 +681,7 @@ func NewXmlResponse(status int, body any) (*http.Response, error) { //nolint: re
 // To pass the content of an existing file as body use [File] as in:
 //
 //	httpmock.NewXmlResponder(200, httpmock.File("body.xml"))
-func NewXmlResponder(status int, body any) (Responder, error) { //nolint: revive
+func NewXmlResponder(status int, body any) (Responder, error) { //nolint: revive,staticcheck
 	resp, err := NewXmlResponse(status, body)
 	if err != nil {
 		return nil, err
@@ -705,7 +705,7 @@ func NewXmlResponder(status int, body any) (Responder, error) { //nolint: revive
 // To pass the content of an existing file as body use [File] as in:
 //
 //	httpmock.NewXmlResponderOrPanic(200, httpmock.File("body.xml"))
-func NewXmlResponderOrPanic(status int, body any) Responder { //nolint: revive
+func NewXmlResponderOrPanic(status int, body any) Responder { //nolint: revive,staticcheck
 	responder, err := NewXmlResponder(status, body)
 	if err != nil {
 		panic(err)
@@ -759,7 +759,7 @@ func (d *dummyReadCloser) setup() {
 		case io.ReadCloser:
 			var buf bytes.Buffer
 			io.Copy(&buf, body) //nolint: errcheck
-			body.Close()
+			body.Close()        //nolint: errcheck
 			d.body = bytes.NewReader(buf.Bytes())
 		}
 	}

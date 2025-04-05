@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil" //nolint: staticcheck
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -137,7 +136,7 @@ func TestNewStringResponse(t *testing.T) {
 	)
 	response := httpmock.NewStringResponse(status, body)
 
-	data, err := ioutil.ReadAll(response.Body)
+	data, err := io.ReadAll(response.Body)
 	require.CmpNoError(err)
 
 	assert.String(data, body)
@@ -153,7 +152,7 @@ func TestNewBytesResponse(t *testing.T) {
 	)
 	response := httpmock.NewBytesResponse(status, []byte(body))
 
-	data, err := ioutil.ReadAll(response.Body)
+	data, err := io.ReadAll(response.Body)
 	require.CmpNoError(err)
 
 	assert.String(data, body)
@@ -167,8 +166,7 @@ func TestNewJsonResponse(t *testing.T) {
 		Hello string `json:"hello"`
 	}
 
-	dir, cleanup := tmpDir(assert)
-	defer cleanup()
+	dir := assert.TempDir()
 	fileName := filepath.Join(dir, "ok.json")
 	writeFile(assert, fileName, []byte(`{ "test": true }`))
 
@@ -203,8 +201,7 @@ func TestNewJsonResponseOrPanic(t *testing.T) {
 		Hello string `json:"hello"`
 	}
 
-	dir, cleanup := tmpDir(assert)
-	defer cleanup()
+	dir := assert.TempDir()
 	fileName := filepath.Join(dir, "ok.json")
 	writeFile(assert, fileName, []byte(`{ "test": true }`))
 
@@ -261,8 +258,7 @@ func TestNewJsonResponder(t *testing.T) {
 	})
 
 	assert.Run("OK file", func(assert *td.T) {
-		dir, cleanup := tmpDir(assert)
-		defer cleanup()
+		dir := assert.TempDir()
 		fileName := filepath.Join(dir, "ok.json")
 		writeFile(assert, fileName, []byte(`{  "foo"  :  42  }`))
 
@@ -308,8 +304,7 @@ func TestNewXmlResponse(t *testing.T) {
 	}
 	expectedBody := string(b)
 
-	dir, cleanup := tmpDir(assert)
-	defer cleanup()
+	dir := assert.TempDir()
 	fileName := filepath.Join(dir, "ok.xml")
 	writeFile(assert, fileName, b)
 
@@ -354,8 +349,7 @@ func TestNewXmlResponder(t *testing.T) {
 	})
 
 	assert.Run("OK file", func(assert *td.T) {
-		dir, cleanup := tmpDir(assert)
-		defer cleanup()
+		dir := assert.TempDir()
 		fileName := filepath.Join(dir, "ok.xml")
 		writeFile(assert, fileName, b)
 
@@ -568,7 +562,7 @@ func TestResponder_Then(t *testing.T) {
 		if !assert.CmpNoError(err, "Responder call") {
 			return
 		}
-		b, err := ioutil.ReadAll(resp.Body)
+		b, err := io.ReadAll(resp.Body)
 		if !assert.CmpNoError(err, "Read response") {
 			return
 		}
@@ -673,7 +667,7 @@ func TestResponder_SetContentLength(t *testing.T) {
 			name: "custom without Len",
 			r: func(req *http.Request) (*http.Response, error) {
 				return &http.Response{
-					Body:          ioutil.NopCloser(strings.NewReader("BODY")),
+					Body:          io.NopCloser(strings.NewReader("BODY")),
 					StatusCode:    200,
 					ContentLength: -1,
 				}, nil
@@ -803,7 +797,7 @@ func TestParallelResponder(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				resp, _ := r(req)
-				b, err := ioutil.ReadAll(resp.Body)
+				b, err := io.ReadAll(resp.Body)
 				td.CmpNoError(t, err, "resp #%d", ir)
 				td.CmpLen(t, b, 4000, "resp #%d", ir)
 				td.CmpHasPrefix(t, b, "ABC-", "resp #%d", ir)

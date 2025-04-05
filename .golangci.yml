@@ -1,0 +1,49 @@
+version: "2"
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+linters:
+  default: none
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - dupl
+    - durationcheck
+    - errcheck
+    - exhaustive
+    - gocritic
+    - godot
+    - govet
+    - importas
+    - ineffassign
+    - misspell
+    - prealloc
+    - revive
+    - staticcheck
+    - testableexamples
+    - unconvert
+    - unused
+    - wastedassign
+    - whitespace
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - -ST1012
+        - -ST1000
+    revive:
+      rules:
+        - name: unused-parameter
+          disabled: true
+formatters:
+  enable:
+    - gci
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - localmodule
+      custom-order: true

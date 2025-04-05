@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil" //nolint: staticcheck
 	"net/http"
 	"reflect"
 	"strings"
@@ -300,7 +299,7 @@ func TestMatchResponders_add_remove(t *testing.T) {
 
 func TestMatchResponders_findMatchResponder(t *testing.T) {
 	newReq := func() *http.Request {
-		req, _ := http.NewRequest("GET", "/foo", ioutil.NopCloser(bytes.NewReader([]byte(`BODY`))))
+		req, _ := http.NewRequest("GET", "/foo", io.NopCloser(bytes.NewReader([]byte(`BODY`))))
 		req.Header.Set("X-Foo", "bar")
 		return req
 	}
@@ -353,7 +352,7 @@ func TestMatchResponders_findMatchResponder(t *testing.T) {
 
 	mrBody1 := httpmock.NewMatchResponder(
 		httpmock.NewMatcher("body-FOO", func(req *http.Request) bool {
-			b, err := ioutil.ReadAll(req.Body)
+			b, err := io.ReadAll(req.Body)
 			return err == nil && bytes.Equal(b, []byte("FOO"))
 		}),
 		resp)
@@ -364,7 +363,7 @@ func TestMatchResponders_findMatchResponder(t *testing.T) {
 
 	mrBody2 := httpmock.NewMatchResponder(
 		httpmock.NewMatcher("body-BODY", func(req *http.Request) bool {
-			b, err := ioutil.ReadAll(req.Body)
+			b, err := io.ReadAll(req.Body)
 			return err == nil && bytes.Equal(b, []byte("BODY"))
 		}),
 		resp)
@@ -374,7 +373,7 @@ func TestMatchResponders_findMatchResponder(t *testing.T) {
 	assert.Cmp(mrs.FindMatchResponder(req), &mrBody2)
 
 	// The request body should still be readable
-	b, err := ioutil.ReadAll(req.Body)
+	b, err := io.ReadAll(req.Body)
 	assert.CmpNoError(err)
 	assert.String(b, "BODY")
 }
@@ -401,7 +400,7 @@ func TestMatchRouteKey(t *testing.T) {
 
 func TestBodyCopyOnRead(t *testing.T) {
 	t.Run("non-nil body", func(t *testing.T) {
-		body := ioutil.NopCloser(bytes.NewReader([]byte(`BODY`)))
+		body := io.NopCloser(bytes.NewReader([]byte(`BODY`)))
 
 		bc := httpmock.NewBodyCopyOnRead(body)
 
