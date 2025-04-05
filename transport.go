@@ -39,10 +39,10 @@ func methodProbablyWrong(method string) bool {
 	return !stdMethods[method] && stdMethods[strings.ToUpper(method)]
 }
 
-// ConnectionFailure is a responder that returns a connection failure.
-// This is the default responder and is called when no other matching
-// responder is found. See [RegisterNoResponder] to override this
-// default behavior.
+// ConnectionFailure is a responder that returns the error
+// [NoResponderFound]. This is the default responder and is called
+// when no other matching responder is found. See
+// [RegisterNoResponder] to override this default behavior.
 func ConnectionFailure(*http.Request) (*http.Response, error) {
 	return nil, NoResponderFound
 }
