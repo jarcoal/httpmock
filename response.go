@@ -741,6 +741,7 @@ type lenReadSeeker interface {
 type dummyReadCloser struct {
 	orig any           // string or []byte
 	body lenReadSeeker // instanciated on demand from orig
+	mu   sync.Mutex
 }
 
 // copy returns a new instance resetting d.body to nil.
@@ -771,6 +772,9 @@ func (d *dummyReadCloser) Read(p []byte) (n int, err error) {
 }
 
 func (d *dummyReadCloser) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	d.setup()
 	d.body.Seek(0, io.SeekEnd) //nolint: errcheck
 	return nil
