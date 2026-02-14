@@ -243,7 +243,7 @@ func newMR(name string, num int) httpmock.MatchResponder {
 func checkMRs(t testing.TB, mrs httpmock.MatchResponders, names ...string) {
 	td.Cmp(t, mrs, td.Smuggle(
 		func(mrs httpmock.MatchResponders) []string {
-			var ns []string
+			ns := make([]string, 0, len(mrs))
 			for _, mr := range mrs {
 				ns = append(ns, fmt.Sprintf("%s:%d",
 					mr.Matcher().Name(), findMatcher(mr.Matcher().FnPointer())))
