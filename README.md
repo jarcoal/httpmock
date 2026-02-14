@@ -4,7 +4,7 @@ Easy mocking of http responses from external resources.
 
 ## Install
 
-Currently supports Go 1.16 to 1.24 and is regularly tested against tip.
+Currently supports Go 1.16 to 1.26 and is regularly tested against tip.
 
 `v1` branch has to be used instead of `master`.
 
