@@ -31,8 +31,8 @@ jobs:
       - name: Linting
         if: matrix.full-tests
         run: |
-          curl -sL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh |
-              sh -s -- -b $HOME/go/bin v2.9.0
+          curl -sL https://golangci-lint.run/install.sh |
+              sh -s -- -b $HOME/go/bin v2.12.2
           $HOME/go/bin/golangci-lint run
 
       - name: Testing
