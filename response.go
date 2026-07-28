@@ -139,8 +139,12 @@ func (r Responder) Trace(fn func(...any)) Responder {
 //	  )
 func (r Responder) Delay(d time.Duration) Responder {
 	return func(req *http.Request) (*http.Response, error) {
-		time.Sleep(d)
-		return r(req)
+		select {
+		case <-time.After(d):
+			return r(req)
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
+		}
 	}
 }
 

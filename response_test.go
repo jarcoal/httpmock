@@ -1,6 +1,7 @@
 package httpmock_test
 
 import (
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -538,6 +539,22 @@ func TestResponder(t *testing.T) {
 	duration := time.Since(before)
 	chkCalled()
 	td.Cmp(t, duration, td.Gte(100*time.Millisecond), "Responder is delayed")
+
+	//
+	// interrupted Delay
+	ctx, cancel := context.WithCancel(context.Background())
+	req = req.WithContext(ctx)
+	rt = r.Delay(5 * time.Second)
+	before = time.Now()
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	chk(rt, nil, "context canceled")
+	duration = time.Since(before)
+	chkNotCalled()
+	td.Cmp(t, duration, td.Between(100*time.Millisecond, 200*time.Millisecond),
+		"Responder is delayed but interrupted")
 }
 
 func TestResponder_Then(t *testing.T) {
