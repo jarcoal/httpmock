@@ -823,3 +823,108 @@ func TestParallelResponder(t *testing.T) {
 		wg.Wait()
 	}
 }
+
+func TestParallelLimitedResponder(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		limit int
+		wrap  func(httpmock.Responder) httpmock.Responder
+	}{
+		{"Once", 1, func(r httpmock.Responder) httpmock.Responder { return r.Once() }},
+		{"Times", 25, func(r httpmock.Responder) httpmock.Responder { return r.Times(25) }},
+		{"TimesZero", 0, func(r httpmock.Responder) httpmock.Responder { return r.Times(0) }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, viaTransport := range []bool{false, true} {
+				t.Run(fmt.Sprintf("transport=%t", viaTransport), func(t *testing.T) {
+					assert, require := td.AssertRequire(t)
+					req, err := http.NewRequest(http.MethodGet, "http://foo.bar", nil)
+					require.CmpNoError(err)
+					responder := test.wrap(httpmock.NewStringResponder(200, "ok"))
+					call := responder
+					if viaTransport {
+						transport := httpmock.NewMockTransport()
+						transport.RegisterResponder(http.MethodGet, req.URL.String(), responder)
+						call = transport.RoundTrip
+					}
+
+					const calls = 128
+					responses := make([]*http.Response, calls)
+					errors := make([]error, calls)
+					start := make(chan struct{})
+					var wg sync.WaitGroup
+					for i := 0; i < calls; i++ {
+						wg.Add(1)
+						go func(i int) {
+							defer wg.Done()
+							<-start
+							responses[i], errors[i] = call(req)
+						}(i)
+					}
+					close(start)
+					wg.Wait()
+
+					successes := 0
+					counts := make(map[string]int)
+					for i, err := range errors {
+						if err == nil {
+							successes++
+							if assert.NotNil(responses[i]) {
+								assert.Cmp(responses[i].StatusCode, 200)
+								assertBody(assert, responses[i], "ok")
+								assert.CmpNoError(responses[i].Body.Close())
+							}
+						} else {
+							assert.Nil(responses[i])
+							counts[err.Error()]++
+						}
+					}
+					assert.Cmp(successes, test.limit)
+					assert.Cmp(len(counts), calls-test.limit)
+					name := test.name
+					if name == "TimesZero" {
+						name = "Times"
+					}
+					for count := test.limit + 1; count <= calls; count++ {
+						message := fmt.Sprintf("Responder not found for GET http://foo.bar (coz %s and already called %d times)", name, count)
+						assert.Cmp(counts[message], 1)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestLimitedResponderAllowsOverlappingCalls(t *testing.T) {
+	const count = 2
+
+	assert, require := td.AssertRequire(t)
+	req, err := http.NewRequest(http.MethodGet, "http://foo.bar", nil)
+	require.CmpNoError(err)
+
+	entered := make(chan struct{}, count)
+	release := make(chan struct{})
+	responder := httpmock.Responder(func(req *http.Request) (*http.Response, error) {
+		entered <- struct{}{}
+		<-release
+		return httpmock.NewStringResponse(200, "ok"), nil
+	}).Times(count)
+	var wg sync.WaitGroup
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := responder(req)
+			assert.CmpNoError(err)
+			if assert.NotNil(resp) {
+				assert.CmpNoError(resp.Body.Close())
+			}
+		}()
+	}
+
+	for i := 0; i < count; i++ {
+		td.Cmp(t, entered, td.Recv(struct{}{}, 2*time.Second))
+	}
+	close(release)
+	wg.Wait()
+}
