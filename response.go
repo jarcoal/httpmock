@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jarcoal/httpmock/internal"
@@ -38,12 +39,12 @@ var suggestedKey = suggestedKeyType{}
 type Responder func(*http.Request) (*http.Response, error)
 
 func (r Responder) times(name string, n int, fn ...func(...any)) Responder {
-	count := 0
+	var count int64
 	return func(req *http.Request) (*http.Response, error) {
-		count++
-		if count > n {
+		callCount := atomic.AddInt64(&count, 1)
+		if callCount > int64(n) {
 			err := internal.StackTracer{
-				Err: fmt.Errorf("Responder not found for %s %s (coz %s and already called %d times)", req.Method, req.URL, name, count),
+				Err: fmt.Errorf("Responder not found for %s %s (coz %s and already called %d times)", req.Method, req.URL, name, callCount),
 			}
 			if len(fn) > 0 {
 				err.CustomFn = fn[0]
